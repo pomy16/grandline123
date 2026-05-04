@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { sendDiscordAlert } from "../services/discord";
 
@@ -18,8 +19,8 @@ settingsRouter.patch("/", async (request, response) => {
     entries.map(([key, value]) =>
       prisma.appSetting.upsert({
         where: { key },
-        update: { value },
-        create: { key, value }
+        update: { value: value as Prisma.InputJsonValue },
+        create: { key, value: value as Prisma.InputJsonValue }
       })
     )
   );

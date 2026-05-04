@@ -5,14 +5,38 @@ import { scanQueue } from "../lib/queue";
 export const productsRouter = Router();
 
 productsRouter.get("/", async (request, response) => {
-  const { q, storeId, game, stockStatus } = request.query;
+  const { q, storeId, game, stockStatus, category, minPrice, maxPrice, foundFrom, foundTo, includeIgnored } = request.query;
   const products = await prisma.product.findMany({
     where: {
-      ignored: false,
+      ignored: includeIgnored === "true" ? undefined : false,
       storeId: typeof storeId === "string" ? storeId : undefined,
       game: typeof game === "string" ? (game as never) : undefined,
       stockStatus: typeof stockStatus === "string" ? (stockStatus as never) : undefined,
-      title: typeof q === "string" ? { contains: q, mode: "insensitive" } : undefined
+      category: typeof category === "string" && category.length > 0 ? { contains: category, mode: "insensitive" } : undefined,
+      price:
+        typeof minPrice === "string" || typeof maxPrice === "string"
+          ? {
+              gte: typeof minPrice === "string" && minPrice.length > 0 ? Number(minPrice) : undefined,
+              lte: typeof maxPrice === "string" && maxPrice.length > 0 ? Number(maxPrice) : undefined
+            }
+          : undefined,
+      firstSeenAt:
+        typeof foundFrom === "string" || typeof foundTo === "string"
+          ? {
+              gte: typeof foundFrom === "string" && foundFrom.length > 0 ? new Date(foundFrom) : undefined,
+              lte: typeof foundTo === "string" && foundTo.length > 0 ? new Date(foundTo) : undefined
+            }
+          : undefined,
+      OR:
+        typeof q === "string" && q.length > 0
+          ? [
+              { title: { contains: q, mode: "insensitive" } },
+              { normalizedTitle: { contains: q.toLowerCase(), mode: "insensitive" } },
+              { sku: { contains: q, mode: "insensitive" } },
+              { ean: { contains: q, mode: "insensitive" } },
+              { category: { contains: q, mode: "insensitive" } }
+            ]
+          : undefined
     },
     include: { store: true },
     orderBy: { lastSeenAt: "desc" },

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { keywordRuleMatchesProduct } from "@tcg-monitor/shared";
 import type { EventType, NormalizedProduct } from "@tcg-monitor/shared";
 import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
@@ -124,18 +125,18 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
           oldValue: existing
             ? {
                 title: existing.title,
-                price: existing.price?.toString(),
+                price: existing.price?.toString() ?? null,
                 stockStatus: existing.stockStatus,
                 imageUrl: existing.imageUrl,
                 isAvailable: existing.isAvailable,
                 isPreorder: existing.isPreorder
               }
-            : null,
+            : undefined,
           newValue: {
             title: incoming.title,
-            price: incoming.price,
+            price: incoming.price ?? null,
             stockStatus: incoming.stockStatus,
-            imageUrl: incoming.imageUrl,
+            imageUrl: incoming.imageUrl ?? null,
             isAvailable: incoming.isAvailable,
             isPreorder: incoming.isPreorder
           },
@@ -151,6 +152,44 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
   return { product, events: productEvents };
 }
 
+async function applyKeywordRules(products: NormalizedProduct[]) {
+  const rules = await prisma.keywordRule.findMany({
+    where: { active: true },
+    orderBy: [{ priority: "desc" }, { createdAt: "asc" }]
+  });
+
+  return products.map((product) => {
+    const rule = rules.find((candidate) =>
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: candidate.includeKeywords,
+          excludeKeywords: candidate.excludeKeywords,
+          game: candidate.game,
+          category: candidate.category,
+          minPrice: candidate.minPrice ? Number(candidate.minPrice) : null,
+          maxPrice: candidate.maxPrice ? Number(candidate.maxPrice) : null,
+          caseInsensitive: candidate.caseInsensitive,
+          fuzzyMatching: candidate.fuzzyMatching
+        },
+        product
+      )
+    );
+
+    return rule
+      ? {
+          ...product,
+          category: rule.category ?? product.category,
+          game: rule.game === "BOTH" ? product.game : rule.game,
+          rawData: {
+            ...(typeof product.rawData === "object" && product.rawData !== null ? product.rawData : {}),
+            matchedKeywordRuleId: rule.id,
+            matchedKeywordRuleName: rule.name
+          }
+        }
+      : product;
+  });
+}
+
 export async function scanStore(storeId: string, scanJobId?: string) {
   const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
   const startedAt = new Date();
@@ -164,7 +203,7 @@ export async function scanStore(storeId: string, scanJobId?: string) {
 
   try {
     const monitor = createMonitor(store.mode);
-    const products = await monitor.scan(toStoreConfig(store));
+    const products = await applyKeywordRules(await monitor.scan(toStoreConfig(store)));
     let eventsCreated = 0;
 
     for (const product of products) {

@@ -105,3 +105,56 @@ export function inferGame(title: string): Game {
 export function productIdentityKey(input: Pick<NormalizedProduct, "canonicalUrl" | "normalizedTitle" | "sku" | "ean">, storeId: string): string {
   return [storeId, input.ean || "", input.sku || "", input.canonicalUrl, input.normalizedTitle].join("|");
 }
+
+export interface KeywordRuleInput {
+  includeKeywords: string[];
+  excludeKeywords: string[];
+  game: Game;
+  category?: string | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  caseInsensitive?: boolean;
+  fuzzyMatching?: boolean;
+}
+
+function normalizeKeyword(value: string, caseInsensitive = true): string {
+  const normalized = value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  return caseInsensitive ? normalized.toLowerCase() : normalized;
+}
+
+function fuzzyIncludes(haystack: string, needle: string): boolean {
+  const compactHaystack = haystack.replace(/\s+/g, "");
+  const compactNeedle = needle.replace(/\s+/g, "");
+  return compactHaystack.includes(compactNeedle);
+}
+
+export function keywordRuleMatchesProduct(rule: KeywordRuleInput, product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "price" | "game">): boolean {
+  if (rule.game !== "BOTH" && product.game !== "BOTH" && product.game !== rule.game) {
+    return false;
+  }
+
+  const caseInsensitive = rule.caseInsensitive ?? true;
+  const haystack = normalizeKeyword(`${product.title} ${product.normalizedTitle}`, caseInsensitive);
+  const includes = (keyword: string) => {
+    const normalizedKeyword = normalizeKeyword(keyword, caseInsensitive);
+    return haystack.includes(normalizedKeyword) || Boolean(rule.fuzzyMatching && fuzzyIncludes(haystack, normalizedKeyword));
+  };
+
+  if (rule.includeKeywords.length > 0 && !rule.includeKeywords.some(includes)) {
+    return false;
+  }
+
+  if (rule.excludeKeywords.some(includes)) {
+    return false;
+  }
+
+  const price = product.price ?? null;
+  if (rule.minPrice !== null && rule.minPrice !== undefined && (price === null || price < rule.minPrice)) {
+    return false;
+  }
+  if (rule.maxPrice !== null && rule.maxPrice !== undefined && (price === null || price > rule.maxPrice)) {
+    return false;
+  }
+
+  return true;
+}
