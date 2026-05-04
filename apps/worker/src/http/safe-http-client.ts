@@ -10,6 +10,21 @@ export interface SafeFetchResult {
   durationMs: number;
 }
 
+export class MonitorRequestError extends Error {
+  constructor(
+    message: string,
+    readonly details: {
+      kind: FetchKind;
+      url: string;
+      status?: number;
+      durationMs?: number;
+    }
+  ) {
+    super(message);
+    this.name = "MonitorRequestError";
+  }
+}
+
 const defaultUserAgent =
   process.env.MONITOR_USER_AGENT ??
   "TCGMonitor/0.1 (+https://github.com/pomy16/grandline123; purchase-assist monitoring; respects robots.txt)";
@@ -138,9 +153,19 @@ export class SafeHttpClient {
         };
         if (response.ok) return result;
         if (![408, 429, 500, 502, 503, 504].includes(response.status)) {
-          throw new Error(`${kind} monitor request failed with ${response.status} for ${targetUrl}`);
+          throw new MonitorRequestError(`${kind} monitor request failed with ${response.status} for ${targetUrl}`, {
+            kind,
+            url: targetUrl,
+            status: response.status,
+            durationMs: result.durationMs
+          });
         }
-        lastError = new Error(`${kind} monitor retryable HTTP ${response.status} for ${targetUrl}`);
+        lastError = new MonitorRequestError(`${kind} monitor retryable HTTP ${response.status} for ${targetUrl}`, {
+          kind,
+          url: targetUrl,
+          status: response.status,
+          durationMs: result.durationMs
+        });
       } catch (error) {
         lastError = error;
       } finally {
@@ -152,6 +177,6 @@ export class SafeHttpClient {
       }
     }
 
-    throw lastError instanceof Error ? lastError : new Error(`${kind} monitor request failed for ${targetUrl}`);
+    throw lastError instanceof Error ? lastError : new MonitorRequestError(`${kind} monitor request failed for ${targetUrl}`, { kind, url: targetUrl });
   }
 }

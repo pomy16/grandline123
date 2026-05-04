@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
 import { prisma } from "../prisma";
+import { MonitorRequestError } from "../http/safe-http-client";
+import { assertNoMockProductsForRealStore } from "./monitor-safety";
 import { notifyProductEvent } from "./notifications";
 import { toStoreConfig } from "./store-config";
 
@@ -211,6 +213,22 @@ async function applyKeywordRules(products: NormalizedProduct[]) {
   });
 }
 
+function monitorErrorContext(error: unknown) {
+  if (error instanceof MonitorRequestError) {
+    return {
+      requestUrl: error.details.url,
+      httpStatus: error.details.status ?? null,
+      durationMs: error.details.durationMs ?? null,
+      errorKind: error.details.kind
+    };
+  }
+
+  return {
+    requestUrl: null,
+    httpStatus: null
+  };
+}
+
 export async function scanStore(storeId: string, scanJobId?: string) {
   const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
   const startedAt = new Date();
@@ -225,6 +243,7 @@ export async function scanStore(storeId: string, scanJobId?: string) {
   try {
     const monitor = createMonitor(store.mode);
     const products = await applyKeywordRules(await monitor.scan(toStoreConfig(store)));
+    assertNoMockProductsForRealStore(store, products);
     let eventsCreated = 0;
 
     await prisma.scanLog.create({
@@ -234,7 +253,10 @@ export async function scanStore(storeId: string, scanJobId?: string) {
         message: `${store.mode} monitor preview for ${store.name}.`,
         context: {
           mode: store.mode,
+          monitorMode: store.mode,
+          fallbackUsed: false,
           productCount: products.length,
+          productsExtracted: products.length,
           products: products.slice(0, 10).map((product) => ({
             title: product.title,
             url: product.canonicalUrl,
@@ -279,8 +301,8 @@ export async function scanStore(storeId: string, scanJobId?: string) {
       data: {
         storeId: store.id,
         severity: "INFO",
-        message: `Mock scan completed for ${store.name}.`,
-        context: { productsFound: products.length, eventsCreated, durationMs }
+        message: `${store.mode} scan completed for ${store.name}.`,
+        context: { mode: store.mode, monitorMode: store.mode, fallbackUsed: false, productsFound: products.length, productsExtracted: products.length, eventsCreated, durationMs }
       }
     });
 
@@ -302,7 +324,18 @@ export async function scanStore(storeId: string, scanJobId?: string) {
       });
     }
     await prisma.scanLog.create({
-      data: { storeId: store.id, severity: "ERROR", message, context: { mode: store.mode } }
+      data: {
+        storeId: store.id,
+        severity: "ERROR",
+        message,
+        context: {
+          mode: store.mode,
+          monitorMode: store.mode,
+          fallbackUsed: false,
+          productsExtracted: 0,
+          ...monitorErrorContext(error)
+        } as Prisma.InputJsonValue
+      }
     });
     throw error;
   }

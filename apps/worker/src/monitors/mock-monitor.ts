@@ -3,6 +3,10 @@ import { inferGame, normalizeTitle, normalizeUrl } from "@tcg-monitor/shared";
 
 export class MockMonitor implements StoreMonitor {
   async scan(storeConfig: StoreConfig): Promise<NormalizedProduct[]> {
+    if (storeConfig.mode !== "MOCK") {
+      throw new Error(`MockMonitor can only scan MOCK stores. Received ${storeConfig.mode}.`);
+    }
+
     const baseUrl = storeConfig.baseUrl || "https://example.invalid";
     const products = [
       {
