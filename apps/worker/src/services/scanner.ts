@@ -6,11 +6,12 @@ import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
 import { prisma } from "../prisma";
 import { MonitorRequestError } from "../http/safe-http-client";
+import { workerConfig } from "../config";
 import { assertNoMockProductsForRealStore } from "./monitor-safety";
 import { notifyProductEvent } from "./notifications";
 import { toStoreConfig } from "./store-config";
 
-function stateHash(product: NormalizedProduct, eventType: EventType): string {
+export function stateHash(product: NormalizedProduct, eventType: EventType): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
@@ -25,7 +26,7 @@ function stateHash(product: NormalizedProduct, eventType: EventType): string {
     .digest("hex");
 }
 
-function detectEvents(existing: Product | null, incoming: NormalizedProduct): EventType[] {
+export function detectEvents(existing: Pick<Product, "price" | "isAvailable" | "isPreorder" | "title" | "imageUrl" | "stockStatus"> | null, incoming: NormalizedProduct): EventType[] {
   if (!existing) return incoming.isPreorder ? ["NEW_PRODUCT", "PREORDER_OPENED"] : ["NEW_PRODUCT"];
 
   const events: EventType[] = [];
@@ -310,11 +311,14 @@ export async function scanStore(storeId: string, scanJobId?: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown scan failure";
     const finishedAt = new Date();
-    await prisma.store.update({
+    const failedStore = await prisma.store.update({
       where: { id: store.id },
       data: {
         lastError: message,
-        repeatedFailureCount: { increment: 1 }
+        repeatedFailureCount: { increment: 1 },
+        autoPausedAfterFailures:
+          store.repeatedFailureCount + 1 >= workerConfig.repeatedFailurePauseThreshold ? true : store.autoPausedAfterFailures,
+        active: store.repeatedFailureCount + 1 >= workerConfig.repeatedFailurePauseThreshold ? false : store.active
       }
     });
     if (scanJobId) {
@@ -337,6 +341,20 @@ export async function scanStore(storeId: string, scanJobId?: string) {
         } as Prisma.InputJsonValue
       }
     });
+    if (failedStore.autoPausedAfterFailures) {
+      await prisma.scanLog.create({
+        data: {
+          storeId: store.id,
+          severity: "WARN",
+          message: `Store ${store.name} was auto-paused after ${failedStore.repeatedFailureCount} repeated scan failures.`,
+          context: {
+            repeatedFailureCount: failedStore.repeatedFailureCount,
+            threshold: workerConfig.repeatedFailurePauseThreshold,
+            mode: store.mode
+          }
+        }
+      });
+    }
     throw error;
   }
 }

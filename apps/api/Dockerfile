@@ -9,5 +9,6 @@ COPY packages/shared/package*.json packages/shared/
 RUN npm install
 COPY . .
 RUN npm run prisma:generate
+RUN npm run build -w packages/shared && npm run build -w apps/api
 EXPOSE 4000
-CMD ["npm", "run", "dev", "-w", "apps/api"]
+CMD ["npm", "run", "start", "-w", "apps/api"]

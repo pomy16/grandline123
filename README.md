@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-The current delivery includes **Phase 1, Phase 2, Phase 3, and Phase 4**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, live admin workflows for stores, keyword rules, products, scan history, mocked scanner runs, Discord notification routing with cooldown and duplicate prevention, and real public-source monitor adapters.
+The current delivery includes **Phase 1 through Phase 6**: full-stack architecture, admin workflows, Discord notification routing, real public-source monitor adapters, polished dashboard UX, production hardening, CI, tests, improved seed data, and deployment documentation.
 
 ## Safety and Compliance
 
@@ -133,6 +133,29 @@ docker-compose.yml
 - Scan preview/debug output in Logs before products are persisted.
 - No CAPTCHA bypass, queue bypass, anti-bot evasion, proxy rotation, automated checkout, or protection-bypass logic.
 
+## Phase 5 Features
+
+- Production-ready dashboard tables with filtering, sorting, pagination, loading states, error states, and empty states.
+- Improved Stores, Products, Logs, Settings, Events, and Dashboard pages.
+- Better manual scan controls, scan result viewer, clearer scan history, and clearer notification delivery history.
+- Safer admin forms with validation and destructive-action confirmations.
+- Responsive navigation and clearer store/product/event status badges.
+- Store error clearing from the UI.
+
+## Phase 6 Features
+
+- Strict environment validation for API and worker startup.
+- Structured JSON logging with redaction for tokens, passwords, secrets, and webhook values.
+- API security headers and clearer health endpoints:
+  - `GET /health/live`
+  - `GET /health/ready`
+  - `GET /health/worker`
+- Worker graceful shutdown, queue concurrency/rate-limit configuration, retry/backoff configuration, and retention cleanup.
+- Scan failure hardening with repeated-failure tracking and auto-pause after a configurable threshold.
+- Expanded unit tests for shared utilities, keyword matching, parsing, normalization, duplicate detection, event generation, Discord payload formatting, monitor safety, API health routes, auth helpers, and web utility smoke coverage.
+- Idempotent seed data with Pokemon and One Piece demo scenarios, scan jobs, logs, notification logs, and placeholder webhook routes.
+- Production-oriented Dockerfiles and GitHub Actions CI.
+
 ## Environment Variables
 
 Copy the example file:
@@ -143,24 +166,41 @@ cp .env.example .env
 
 Important variables:
 
-```bash
-DATABASE_URL=postgresql://tcg_monitor:tcg_monitor@localhost:5432/tcg_monitor?schema=public
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=change-me-in-production
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=change-me
-DISCORD_DEFAULT_WEBHOOK_URL=https://discord.com/api/webhooks/replace/default
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
-REQUEST_TIMEOUT_MS=10000
-MAX_RETRIES=3
-RETRY_BASE_DELAY_MS=750
-MONITOR_USER_AGENT=TCGMonitor/0.1 (+https://github.com/pomy16/grandline123; purchase-assist monitoring; respects robots.txt)
-RESPECT_ROBOTS_TXT=true
-HTML_MONITOR_MAX_PRODUCT_PAGES=25
-SITEMAP_MONITOR_MAX_SITEMAPS=10
-SITEMAP_MONITOR_MAX_PRODUCT_PAGES=50
-DISCORD_TIMEOUT_MS=10000
-```
+| Variable | Required | Used by | Description |
+| --- | --- | --- | --- |
+| `NODE_ENV` | No | all | `development`, `test`, or `production`. Production enables stricter validation. |
+| `API_PORT` | No | API | API listen port. Defaults to `4000`. |
+| `WEB_PORT` | No | web | Next.js listen port. Defaults to `3000`. |
+| `DATABASE_URL` | Yes | API, worker, Prisma | PostgreSQL connection string. |
+| `REDIS_URL` | Yes in production | API, worker | Redis connection string for BullMQ. Defaults to local Redis in development. |
+| `JWT_SECRET` | Yes | API | Session signing secret. Must be long and changed from the default in production. |
+| `SESSION_TTL_SECONDS` | No | API | Bearer token lifetime. Defaults to one day. |
+| `ADMIN_EMAIL` | Yes in production | seed | Initial admin email. Demo default is `admin@example.com`. |
+| `ADMIN_PASSWORD` | Yes in production | seed | Initial admin password. Demo default is `change-me`. |
+| `DISCORD_DEFAULT_WEBHOOK_URL` | No | seed/settings | Optional default Discord webhook placeholder. Keep inactive until ready. |
+| `DISCORD_POKEMON_WEBHOOK_URL` | No | seed/settings | Optional Pokemon route placeholder. |
+| `DISCORD_ONE_PIECE_WEBHOOK_URL` | No | seed/settings | Optional One Piece route placeholder. |
+| `DISCORD_HIGH_PRIORITY_WEBHOOK_URL` | No | seed/settings | Optional high-priority route placeholder. |
+| `DISCORD_ERROR_WEBHOOK_URL` | No | seed/settings | Optional error route placeholder. |
+| `NEXT_PUBLIC_API_BASE_URL` | Yes for web | web | Browser-visible API base URL. |
+| `DEFAULT_POLLING_INTERVAL_SECONDS` | No | API, worker, seed | Safer default polling interval. Minimum is 60 seconds. |
+| `NOTIFICATION_COOLDOWN_SECONDS` | No | API, worker, seed | Global notification cooldown default. |
+| `REQUEST_TIMEOUT_MS` | No | worker | Public monitor request timeout. |
+| `MAX_RETRIES` | No | worker | Retry count for retryable public monitor failures. |
+| `RETRY_BASE_DELAY_MS` | No | worker | Exponential backoff base delay. |
+| `QUEUE_JOB_ATTEMPTS` | No | API | BullMQ attempts for queued jobs. |
+| `QUEUE_BACKOFF_MS` | No | API | BullMQ retry backoff delay. |
+| `QUEUE_CONCURRENCY` | No | worker | Worker scan concurrency. |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | No | worker | Queue limiter cap. |
+| `REPEATED_FAILURE_PAUSE_THRESHOLD` | No | worker | Auto-pause store after repeated scan failures. |
+| `LOG_RETENTION_DAYS` | No | worker, seed | Retention window for scan logs, notification logs, and finished scan jobs. |
+| `CLEANUP_INTERVAL_MS` | No | worker | Scheduled cleanup interval. |
+| `MONITOR_USER_AGENT` | Yes in production | worker | Clear purchase-assist monitoring user agent. |
+| `RESPECT_ROBOTS_TXT` | No | worker | Keep `true` for safe default behavior. |
+| `HTML_MONITOR_MAX_PRODUCT_PAGES` | No | worker | Maximum HTML product pages per listing scan. |
+| `SITEMAP_MONITOR_MAX_SITEMAPS` | No | worker | Maximum sitemap files to inspect. |
+| `SITEMAP_MONITOR_MAX_PRODUCT_PAGES` | No | worker | Maximum sitemap product pages to inspect. |
+| `DISCORD_TIMEOUT_MS` | No | worker/API settings test | Discord delivery timeout. |
 
 Use real Discord webhook URLs only when you are ready to test delivery.
 
@@ -196,6 +236,13 @@ Seed demo data:
 npm run prisma:seed
 ```
 
+Demo credentials after seeding with the default `.env`:
+
+- Email: `admin@example.com`
+- Password: `change-me`
+
+Change these values before any production use.
+
 Run API, worker, and frontend:
 
 ```bash
@@ -209,7 +256,7 @@ Open:
 
 ## Docker Compose Setup
 
-For the full stack:
+For local full-stack development:
 
 ```bash
 cp .env.example .env
@@ -223,9 +270,17 @@ docker compose exec api npm run prisma:migrate -- --name init
 docker compose exec api npm run prisma:seed
 ```
 
+The compose file mounts the source tree and overrides service commands to run development servers. The service Dockerfiles build production artifacts and run:
+
+- API: `npm run start -w apps/api`
+- Worker: `npm run start -w apps/worker`
+- Web: `npm run start -w apps/web`
+
+For production, use strong secrets, external PostgreSQL/Redis or managed equivalents, run migrations before starting workers, and keep the web `NEXT_PUBLIC_API_BASE_URL` pointed at the public API URL.
+
 ## Mock Scanner
 
-Phase 1 includes a `MOCK` monitor only. It does not request any external store.
+The `MOCK` monitor does not request any external store.
 
 To trigger a scan:
 
@@ -403,13 +458,37 @@ Run all tests:
 npm test
 ```
 
+Run TypeScript checks:
+
+```bash
+npm run typecheck
+```
+
+Run production builds:
+
+```bash
+npm run build
+```
+
 Run shared utility tests:
 
 ```bash
 npm run test -w packages/shared
 ```
 
-Current Phase 1 tests cover normalization, price parsing, URL normalization, game inference, and identity key generation.
+Current tests cover:
+
+- shared normalization utilities
+- keyword rule matching
+- price parsing
+- product parsing and normalization
+- duplicate product detection
+- event generation and state hashing
+- Discord payload formatting
+- real monitor safety behavior
+- API health route behavior
+- auth helper behavior
+- web formatting smoke coverage
 
 ## Deployment Notes
 
@@ -418,6 +497,46 @@ Current Phase 1 tests cover normalization, price parsing, URL normalization, gam
 - Keep webhook URLs secret.
 - Tune polling intervals per store.
 - Keep request timeouts and retry limits conservative.
+- Keep `RESPECT_ROBOTS_TXT=true`.
+- Keep webhook placeholders inactive until real Discord URLs are configured.
+- Monitor `GET /health/ready` and `GET /health/worker`.
+- Review Logs for repeated scan failures. Stores auto-pause after `REPEATED_FAILURE_PAUSE_THRESHOLD`.
+- Run CI or the local verification commands before deploying:
+
+```bash
+npm install
+npm run prisma:generate
+npm run typecheck
+npm test
+npm run build
+```
+
+## Discord Webhook Safety
+
+- Add real webhook URLs only in Settings when you are ready to test delivery.
+- Webhook URLs are masked in the Settings list and redacted by structured logs.
+- Use separate targets for `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, and `ERROR_LOG` when useful.
+- Test delivery from Settings before activating broad alert rules.
+- Do not paste webhook URLs into scan logs, store notes, or issue reports.
+
+## Troubleshooting
+
+- **API fails on startup**: check `DATABASE_URL`, `REDIS_URL`, and `JWT_SECRET`. Production mode requires non-default secrets.
+- **Login fails**: run `npm run prisma:seed`, then use the configured `ADMIN_EMAIL` and `ADMIN_PASSWORD`.
+- **Dashboard shows API errors**: verify `NEXT_PUBLIC_API_BASE_URL` and `GET /health/ready`.
+- **Worker is not scanning**: verify Redis is reachable and check `GET /health/worker`.
+- **Store auto-paused**: inspect Logs, fix the store configuration or public source, then clear the store error and resume it.
+- **Discord alerts are skipped**: configure and activate a matching webhook target, then inspect Logs -> Notification delivery.
+- **HTML monitor finds no products**: prefer JSON-LD/public API/RSS/sitemap when available; otherwise review selectors against public page markup.
+- **Tests fail after dependency install on macOS**: remove `node_modules` and reinstall. This can happen with native optional Rollup packages.
+
+## Known Limitations
+
+- No automatic purchasing, checkout automation, queue bypassing, CAPTCHA solving, proxy rotation, or evasion logic.
+- Playwright is optional and only for rendering public pages that require JavaScript.
+- HTML parsing is intentionally conservative and may need selectors per store.
+- Notification delivery depends on Discord availability and webhook configuration.
+- Scheduling is queue-based; production deployments should monitor Redis and worker health.
 - Configure log retention according to your storage requirements.
 - Do not enable real monitors against stores until rate limits and robots.txt behavior are reviewed.
 

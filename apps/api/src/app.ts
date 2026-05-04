@@ -10,11 +10,19 @@ import { productsRouter } from "./routes/products";
 import { rulesRouter } from "./routes/rules";
 import { settingsRouter } from "./routes/settings";
 import { storesRouter } from "./routes/stores";
+import { logger } from "./lib/logger";
 
 export function createApp() {
   const app = express();
 
   app.use(cors({ origin: true, credentials: true }));
+  app.use((_request, response, next) => {
+    response.setHeader("x-content-type-options", "nosniff");
+    response.setHeader("x-frame-options", "DENY");
+    response.setHeader("referrer-policy", "no-referrer");
+    response.setHeader("permissions-policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
   app.use(express.json({ limit: "1mb" }));
   app.use(optionalAuth);
 
@@ -30,6 +38,7 @@ export function createApp() {
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     const message = error instanceof Error ? error.message : "Unexpected server error";
+    logger.error("Unhandled API request error.", { error });
     response.status(500).json({ error: message });
   });
 
