@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-The current delivery includes **Phase 1, Phase 2, and Phase 3**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, live admin workflows for stores, keyword rules, products, scan history, mocked scanner runs, and Discord notification routing with cooldown and duplicate prevention. Real store scraping adapters are intentionally not implemented yet.
+The current delivery includes **Phase 1, Phase 2, Phase 3, and Phase 4**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, live admin workflows for stores, keyword rules, products, scan history, mocked scanner runs, Discord notification routing with cooldown and duplicate prevention, and real public-source monitor adapters.
 
 ## Safety and Compliance
 
@@ -119,6 +119,20 @@ docker-compose.yml
 - Settings UI for creating, editing, deleting, and testing Discord webhooks.
 - Logs UI now includes notification delivery history.
 
+## Phase 4 Features
+
+- Real monitor adapters:
+  - `API` monitor for public JSON endpoints.
+  - `HTML` monitor for publicly accessible listing/product pages and JSON-LD structured data.
+  - `SITEMAP` monitor for sitemap.xml and sitemap index files.
+  - `RSS` monitor for RSS/Atom feeds.
+  - `PLAYWRIGHT` monitor as an optional JavaScript-rendering fallback.
+- Per-store monitor mode selection through the Store `mode` field.
+- Safe HTTP client with request timeout, retry logic, exponential backoff, configurable user-agent, and basic robots.txt checks.
+- Safe parser handling for malformed JSON, XML, RSS, structured data, and selector extraction.
+- Scan preview/debug output in Logs before products are persisted.
+- No CAPTCHA bypass, queue bypass, anti-bot evasion, proxy rotation, automated checkout, or protection-bypass logic.
+
 ## Environment Variables
 
 Copy the example file:
@@ -137,6 +151,15 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=change-me
 DISCORD_DEFAULT_WEBHOOK_URL=https://discord.com/api/webhooks/replace/default
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+REQUEST_TIMEOUT_MS=10000
+MAX_RETRIES=3
+RETRY_BASE_DELAY_MS=750
+MONITOR_USER_AGENT=TCGMonitor/0.1 (+https://github.com/pomy16/grandline123; purchase-assist monitoring; respects robots.txt)
+RESPECT_ROBOTS_TXT=true
+HTML_MONITOR_MAX_PRODUCT_PAGES=25
+SITEMAP_MONITOR_MAX_SITEMAPS=10
+SITEMAP_MONITOR_MAX_PRODUCT_PAGES=50
+DISCORD_TIMEOUT_MS=10000
 ```
 
 Use real Discord webhook URLs only when you are ready to test delivery.
@@ -284,7 +307,87 @@ Stores support:
 - notes
 - trusted store flag and public cart URL for purchase-assist mode
 
-Real `API`, `HTML`, `SITEMAP`, `RSS`, and `PLAYWRIGHT` adapters are planned for Phase 4.
+Real `API`, `HTML`, `SITEMAP`, `RSS`, and optional `PLAYWRIGHT` adapters are available.
+
+## Configuring a Real Store Safely
+
+Use the least invasive monitor mode that works:
+
+1. Prefer `API` when the store publishes a public JSON endpoint.
+2. Use `RSS` when the store publishes a product feed.
+3. Use `SITEMAP` when products are discoverable through sitemap.xml.
+4. Use `HTML` only for publicly accessible listing or product pages.
+5. Use `PLAYWRIGHT` only when a public page requires JavaScript rendering and no simpler public source exists.
+
+Recommended setup:
+
+- Keep polling intervals conservative, for example 300 seconds or more.
+- Keep `RESPECT_ROBOTS_TXT=true`.
+- Do not add cookies, session tokens, checkout URLs, login-only endpoints, or private APIs.
+- Do not monitor pages protected by CAPTCHA, queues, login walls, or anti-bot challenges.
+- Use request headers only for normal public access metadata, such as a clear user-agent:
+
+```json
+{
+  "user-agent": "TCGMonitor/0.1 (+https://github.com/pomy16/grandline123; contact: you@example.com)",
+  "accept": "application/json,text/html,application/xml,text/xml;q=0.9,*/*;q=0.8"
+}
+```
+
+For `HTML` mode, configure selectors only for public page content:
+
+- product URL selector
+- product title selector
+- price selector
+- image selector
+- stock status selector
+- preorder status selector
+
+The HTML monitor first attempts JSON-LD structured data, then configured selectors, and writes a scan preview to Logs.
+
+### API Monitor
+
+Configure:
+
+- `mode`: `API`
+- `apiEndpoint`: public JSON endpoint
+- optional listing URLs for additional public JSON endpoints
+
+The API parser accepts arrays or common wrappers such as `products`, `items`, `data`, `results`, and `nodes`.
+
+### Sitemap Monitor
+
+Configure:
+
+- `mode`: `SITEMAP`
+- listing URLs with sitemap.xml URLs, or leave listing URLs empty to try `/sitemap.xml`
+
+The sitemap monitor extracts likely product URLs and parses product pages through the HTML monitor.
+
+### RSS Monitor
+
+Configure:
+
+- `mode`: `RSS`
+- listing URLs with public RSS/Atom feed URLs
+
+The RSS monitor reads item/entry title, link, description, price, image, availability, GTIN, and category fields when present.
+
+### Playwright Monitor
+
+Configure:
+
+- `mode`: `PLAYWRIGHT`
+- listing URLs for public pages that require JavaScript rendering
+
+Install Playwright before using this mode:
+
+```bash
+npm install -w apps/worker playwright
+npx playwright install chromium
+```
+
+Do not use Playwright to bypass CAPTCHA, queues, bot checks, login walls, checkout restrictions, or any store protection. It is only for rendering public pages when simpler public sources are unavailable.
 
 ## Adding Keyword Rules
 
@@ -356,7 +459,7 @@ Phase 2 implemented real store management flows, keyword rule CRUD UI, product d
 
 Phase 3 implemented Discord webhook routing, event cooldowns, duplicate alert prevention, notification logs, improved delivery error handling, and webhook testing from the UI.
 
-Phase 4 will implement API, HTML, sitemap, RSS, and optional Playwright monitor adapters.
+Phase 4 implemented API, HTML, sitemap, RSS, and optional Playwright monitor adapters.
 
 Phase 5 will complete dashboard tables, filters, logs, settings, and manual scan controls.
 

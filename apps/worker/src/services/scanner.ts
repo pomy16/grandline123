@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { keywordRuleMatchesProduct } from "@tcg-monitor/shared";
 import type { EventType, NormalizedProduct } from "@tcg-monitor/shared";
+import { Prisma } from "@prisma/client";
 import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
 import { prisma } from "../prisma";
@@ -225,6 +226,28 @@ export async function scanStore(storeId: string, scanJobId?: string) {
     const monitor = createMonitor(store.mode);
     const products = await applyKeywordRules(await monitor.scan(toStoreConfig(store)));
     let eventsCreated = 0;
+
+    await prisma.scanLog.create({
+      data: {
+        storeId: store.id,
+        severity: "DEBUG",
+        message: `${store.mode} monitor preview for ${store.name}.`,
+        context: {
+          mode: store.mode,
+          productCount: products.length,
+          products: products.slice(0, 10).map((product) => ({
+            title: product.title,
+            url: product.canonicalUrl,
+            price: product.price ?? null,
+            stockStatus: product.stockStatus,
+            source:
+              typeof product.rawData === "object" && product.rawData !== null && "source" in product.rawData
+                ? String(product.rawData.source)
+                : "unknown"
+          }))
+        } as Prisma.InputJsonValue
+      }
+    });
 
     for (const product of products) {
       const result = await persistProduct(store, product);
