@@ -55,22 +55,32 @@ export function buildDiscordPayload(input: Omit<DiscordAlertInput, "webhookUrl" 
 export async function sendDiscordAlert(input: DiscordAlertInput) {
   const payload = buildDiscordPayload(input);
   const payloadHash = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.DISCORD_TIMEOUT_MS ?? 10_000));
 
   try {
     const response = await fetch(input.webhookUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    const responseText = await response.text().catch(() => "");
 
     await prisma.notificationLog.create({
       data: {
         target: input.target,
         status: response.ok ? "SENT" : "FAILED",
         payloadHash,
-        response: { status: response.status, statusText: response.statusText },
+        response: {
+          status: response.status,
+          statusText: response.statusText,
+          durationMs: Date.now() - startedAt,
+          body: responseText.slice(0, 500)
+        },
         sentAt: response.ok ? new Date() : null,
-        error: response.ok ? null : `Discord returned ${response.status}`
+        error: response.ok ? null : `Discord returned ${response.status}: ${responseText.slice(0, 160)}`
       }
     });
 
@@ -81,9 +91,12 @@ export async function sendDiscordAlert(input: DiscordAlertInput) {
         target: input.target,
         status: "FAILED",
         payloadHash,
-        error: error instanceof Error ? error.message : "Unknown Discord delivery error"
+        error: error instanceof Error ? error.message : "Unknown Discord delivery error",
+        response: { durationMs: Date.now() - startedAt }
       }
     });
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }

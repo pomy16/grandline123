@@ -29,9 +29,21 @@ type ScanJob = {
   store?: { name: string } | null;
 };
 
+type NotificationLog = {
+  id: string;
+  target: string;
+  status: string;
+  error?: string | null;
+  sentAt?: string | null;
+  createdAt: string;
+  product?: { title: string; store: { name: string } } | null;
+  event?: { type: string } | null;
+};
+
 export default function LogsPage() {
   const [logs, setLogs] = useState<ScanLog[]>([]);
   const [jobs, setJobs] = useState<ScanJob[]>([]);
+  const [notifications, setNotifications] = useState<NotificationLog[]>([]);
   const [filters, setFilters] = useState({ severity: "", store: "" });
   const [loading, setLoading] = useState(true);
 
@@ -39,12 +51,14 @@ export default function LogsPage() {
     setLoading(true);
     const params = new URLSearchParams();
     if (filters.severity) params.set("severity", filters.severity);
-    const [logPayload, jobPayload] = await Promise.all([
+    const [logPayload, jobPayload, notificationPayload] = await Promise.all([
       apiFetch<{ data: ScanLog[] }>(`/api/logs${params.toString() ? `?${params}` : ""}`),
-      apiFetch<{ data: ScanJob[] }>("/api/logs/scan-jobs")
+      apiFetch<{ data: ScanJob[] }>("/api/logs/scan-jobs"),
+      apiFetch<{ data: NotificationLog[] }>("/api/logs/notifications")
     ]);
     setLogs(logPayload.data.filter((log) => !filters.store || log.store?.name.toLowerCase().includes(filters.store.toLowerCase())));
     setJobs(jobPayload.data);
+    setNotifications(notificationPayload.data);
     setLoading(false);
   }
 
@@ -113,6 +127,44 @@ export default function LogsPage() {
                 </div>
               ))}
               {jobs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">No scan jobs yet.</div> : null}
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle>Notification delivery</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full min-w-[920px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-3 pr-4 font-medium">Created</th>
+                    <th className="py-3 pr-4 font-medium">Target</th>
+                    <th className="py-3 pr-4 font-medium">Status</th>
+                    <th className="py-3 pr-4 font-medium">Event</th>
+                    <th className="py-3 pr-4 font-medium">Product</th>
+                    <th className="py-3 pr-4 font-medium">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifications.map((notification) => (
+                    <tr key={notification.id} className="border-b border-border/60">
+                      <td className="py-3 pr-4 text-muted-foreground">{new Date(notification.createdAt).toLocaleString()}</td>
+                      <td className="py-3 pr-4">{notification.target}</td>
+                      <td className="py-3 pr-4">
+                        <Badge tone={notification.status === "SENT" ? "success" : notification.status === "FAILED" ? "danger" : "warning"}>{notification.status}</Badge>
+                      </td>
+                      <td className="py-3 pr-4">{notification.event?.type ?? "TEST"}</td>
+                      <td className="py-3 pr-4">
+                        <div>{notification.product?.title ?? "-"}</div>
+                        <div className="text-xs text-muted-foreground">{notification.product?.store.name ?? ""}</div>
+                      </td>
+                      <td className="max-w-md truncate py-3 pr-4 text-muted-foreground">{notification.error ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {notifications.length === 0 && !loading ? <div className="py-8 text-center text-sm text-muted-foreground">No notification logs yet.</div> : null}
             </CardContent>
           </Card>
         </div>

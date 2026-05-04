@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-The current delivery includes **Phase 1 and Phase 2**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, and live admin workflows for stores, keyword rules, products, scan history, and mocked scanner runs. Real store scraping adapters are intentionally not implemented yet.
+The current delivery includes **Phase 1, Phase 2, and Phase 3**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, live admin workflows for stores, keyword rules, products, scan history, mocked scanner runs, and Discord notification routing with cooldown and duplicate prevention. Real store scraping adapters are intentionally not implemented yet.
 
 ## Safety and Compliance
 
@@ -103,6 +103,21 @@ docker-compose.yml
   - ignore product button
 - Live event timeline and logs pages backed by the API.
 - Mock scanner now applies active keyword rules to scanned products before persistence.
+
+## Phase 3 Features
+
+- Discord routing for product events created by the worker.
+- Webhook target selection by:
+  - high priority rules
+  - explicit keyword rule webhook target
+  - product game (`POKEMON`, `ONE_PIECE`, or `BOTH`)
+  - default webhook fallback
+- Event cooldowns using keyword rule cooldowns or the global `notificationCooldownSeconds` setting.
+- Duplicate alert prevention with stable state hashes and notification payload hashes.
+- Notification logs for sent, failed, and skipped deliveries.
+- Improved Discord delivery error handling with timeout, HTTP status, short response body, duration, and scan log entries.
+- Settings UI for creating, editing, deleting, and testing Discord webhooks.
+- Logs UI now includes notification delivery history.
 
 ## Environment Variables
 
@@ -213,7 +228,17 @@ From the dashboard:
 
 ## Discord Webhook Test
 
-Configure an active webhook in the database or through the Settings API, then call:
+Configure an active webhook in the database, through the Settings API, or through the Settings UI.
+
+From the dashboard:
+
+1. Sign in at [http://localhost:3000/login](http://localhost:3000/login).
+2. Open Settings.
+3. Create a webhook with target `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, or `ERROR_LOG`.
+4. Click `Test`.
+5. Check Logs -> Notification delivery.
+
+From the API:
 
 ```bash
 curl -X POST http://localhost:4000/api/settings/webhooks/WEBHOOK_ID/test \
@@ -221,6 +246,25 @@ curl -X POST http://localhost:4000/api/settings/webhooks/WEBHOOK_ID/test \
 ```
 
 The Discord embed includes product title, store, price, stock status, category, event type, timestamp, image, and an open product quick action.
+
+## Discord Routing
+
+When the worker creates a product event, it resolves a webhook in this order:
+
+1. `HIGH_PRIORITY`, when a matched rule has `HIGH` or `CRITICAL` priority.
+2. The matched keyword rule's explicit webhook target, when it is not `DEFAULT`.
+3. `POKEMON` or `ONE_PIECE`, based on the product game.
+4. `DEFAULT`.
+
+If no active webhook is found, the delivery is recorded as `SKIPPED`.
+
+Duplicate prevention uses:
+
+- `Product.lastNotifiedHash`
+- stable notification payload hashes
+- per-product and per-event-type cooldown checks
+
+Manual product test alerts can still be sent from the Products page and are logged separately.
 
 ## Adding a Store
 
@@ -310,7 +354,7 @@ Confirm the webhook URL is valid, active, and not a placeholder. Discord may als
 
 Phase 2 implemented real store management flows, keyword rule CRUD UI, product database views, and deeper mocked scanner integration.
 
-Phase 3 will implement Discord webhook routing, event cooldowns, and duplicate alert prevention.
+Phase 3 implemented Discord webhook routing, event cooldowns, duplicate alert prevention, notification logs, improved delivery error handling, and webhook testing from the UI.
 
 Phase 4 will implement API, HTML, sitemap, RSS, and optional Playwright monitor adapters.
 
