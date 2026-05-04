@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MonitorMode {
+  API
+  SITEMAP
+  RSS
+  HTML
+  PLAYWRIGHT
+  MOCK
+}
+
+enum Game {
+  POKEMON
+  ONE_PIECE
+  BOTH
+  UNKNOWN
+}
+
+enum StockStatus {
+  IN_STOCK
+  OUT_OF_STOCK
+  PREORDER
+  UNKNOWN
+}
+
+enum EventType {
+  NEW_PRODUCT
+  RESTOCK
+  PRICE_DROP
+  PRICE_INCREASE
+  SOLD_OUT
+  PREORDER_OPENED
+  PRODUCT_UPDATED
+}
+
+enum AlertPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum WebhookTarget {
+  DEFAULT
+  POKEMON
+  ONE_PIECE
+  HIGH_PRIORITY
+  ERROR_LOG
+}
+
+enum ScanJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+enum LogSeverity {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Store {
+  id                         String      @id @default(cuid())
+  name                       String
+  baseUrl                    String
+  listingUrls                String[]    @default([])
+  apiEndpoint                String?
+  mode                       MonitorMode @default(MOCK)
+  pollingIntervalSeconds     Int         @default(300)
+  currency                   String      @default("EUR")
+  country                    String?
+  language                   String?
+  active                     Boolean     @default(false)
+  trusted                    Boolean     @default(false)
+  requestHeaders             Json?
+  selectorProductUrl         String?
+  selectorTitle              String?
+  selectorPrice              String?
+  selectorImage              String?
+  selectorStockStatus        String?
+  selectorPreorderStatus     String?
+  notes                      String?
+  publicCartUrl              String?
+  repeatedFailureCount       Int         @default(0)
+  autoPausedAfterFailures    Boolean     @default(false)
+  lastScanAt                 DateTime?
+  nextScanAt                 DateTime?
+  lastError                  String?
+  averageScanDurationMs      Int?
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
+  products                   Product[]
+  scanJobs                   ScanJob[]
+  scanLogs                   ScanLog[]
+
+  @@index([active])
+  @@index([mode])
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  storeId          String
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  title            String
+  normalizedTitle  String
+  url              String
+  canonicalUrl     String
+  imageUrl         String?
+  price            Decimal?          @db.Decimal(12, 2)
+  previousPrice    Decimal?          @db.Decimal(12, 2)
+  currency         String
+  stockStatus      StockStatus       @default(UNKNOWN)
+  isAvailable      Boolean           @default(false)
+  isPreorder       Boolean           @default(false)
+  sku              String?
+  ean              String?
+  category         String?
+  game             Game              @default(UNKNOWN)
+  firstSeenAt      DateTime          @default(now())
+  lastSeenAt       DateTime          @default(now())
+  lastChangedAt    DateTime?
+  lastNotifiedHash String?
+  ignored          Boolean           @default(false)
+  purchaseNotes    String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  snapshots        ProductSnapshot[]
+  events           ProductEvent[]
+  notificationLogs NotificationLog[]
+  ignoredProducts  IgnoredProduct[]
+
+  @@unique([storeId, canonicalUrl])
+  @@index([storeId, normalizedTitle])
+  @@index([sku])
+  @@index([ean])
+  @@index([game])
+  @@index([stockStatus])
+  @@index([firstSeenAt])
+}
+
+model ProductSnapshot {
+  id          String      @id @default(cuid())
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title       String
+  price       Decimal?    @db.Decimal(12, 2)
+  imageUrl    String?
+  stockStatus StockStatus
+  isAvailable Boolean
+  isPreorder  Boolean
+  capturedAt  DateTime    @default(now())
+  rawData     Json?
+
+  @@index([productId, capturedAt])
+}
+
+model ProductEvent {
+  id               String            @id @default(cuid())
+  productId        String
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type             EventType
+  oldValue         Json?
+  newValue         Json?
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  notificationSent Boolean           @default(false)
+  notificationLogs NotificationLog[]
+
+  @@index([type, createdAt])
+  @@index([productId, createdAt])
+}
+
+model KeywordRule {
+  id              String        @id @default(cuid())
+  name            String
+  includeKeywords String[]      @default([])
+  excludeKeywords String[]      @default([])
+  category        String?
+  game            Game          @default(BOTH)
+  minPrice        Decimal?      @db.Decimal(12, 2)
+  maxPrice        Decimal?      @db.Decimal(12, 2)
+  priority        AlertPriority @default(NORMAL)
+  webhookTarget   WebhookTarget @default(DEFAULT)
+  caseInsensitive Boolean       @default(true)
+  fuzzyMatching   Boolean       @default(false)
+  active          Boolean       @default(true)
+  cooldownSeconds Int           @default(900)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model DiscordWebhook {
+  id        String        @id @default(cuid())
+  name      String
+  target    WebhookTarget @default(DEFAULT)
+  url       String
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([target, active])
+}
+
+model ScanJob {
+  id            String        @id @default(cuid())
+  storeId       String?
+  store         Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  status        ScanJobStatus @default(QUEUED)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
+  productsFound Int           @default(0)
+  eventsCreated Int           @default(0)
+  error         String?
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@index([storeId, createdAt])
+}
+
+model ScanLog {
+  id        String      @id @default(cuid())
+  storeId   String?
+  store     Store?      @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  severity  LogSeverity @default(INFO)
+  message   String
+  context   Json?
+  createdAt DateTime    @default(now())
+
+  @@index([severity, createdAt])
+  @@index([storeId, createdAt])
+}
+
+model NotificationLog {
+  id          String             @id @default(cuid())
+  productId   String?
+  product     Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
+  eventId     String?
+  event       ProductEvent?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  target      WebhookTarget
+  status      NotificationStatus @default(PENDING)
+  payloadHash String?
+  response    Json?
+  error       String?
+  sentAt      DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@index([status, createdAt])
+  @@index([target, createdAt])
+}
+
+model IgnoredProduct {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([productId])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

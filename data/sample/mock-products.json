@@ -1,0 +1,16 @@
+[
+  {
+    "title": "Pokemon TCG Scarlet & Violet Booster Box",
+    "url": "https://example.invalid/products/pokemon-sv-booster-box",
+    "price": 119.99,
+    "currency": "EUR",
+    "stockStatus": "IN_STOCK"
+  },
+  {
+    "title": "One Piece Card Game Starter Deck Demo",
+    "url": "https://example.invalid/products/one-piece-starter-deck",
+    "price": 14.99,
+    "currency": "EUR",
+    "stockStatus": "PREORDER"
+  }
+]

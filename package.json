@@ -1,0 +1,35 @@
+{
+  "name": "tcg-monitor-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-ready monitoring platform for Pokemon TCG and One Piece Card Game e-commerce products.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:worker": "npm run dev -w apps/worker",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "prisma": "^5.14.0",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0"
+  }
+}

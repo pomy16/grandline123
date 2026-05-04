@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tcg_monitor
+      POSTGRES_PASSWORD: tcg_monitor
+      POSTGRES_DB: tcg_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tcg_monitor -d tcg_monitor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run dev -w apps/api
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run dev -w apps/worker
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    command: npm run dev -w apps/web
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/web/.next
+
+volumes:
+  postgres-data:
+  redis-data:
