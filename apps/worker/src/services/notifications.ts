@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AlertPriority, EventType, Game, Product, ProductEvent, WebhookTarget } from "@prisma/client";
+import { workerConfig } from "../config";
 import { prisma } from "../prisma";
 import { buildDiscordPayload, sendWebhook } from "./discord";
 
@@ -65,7 +66,7 @@ async function resolveWebhook(productGame: Game, priority?: AlertPriority | null
 async function getGlobalCooldownSeconds() {
   const setting = await prisma.appSetting.findUnique({ where: { key: "notificationCooldownSeconds" } });
   if (typeof setting?.value === "number") return setting.value;
-  return 900;
+  return workerConfig.notificationCooldownSeconds;
 }
 
 function stateHashForEvent(event: EventWithProduct) {

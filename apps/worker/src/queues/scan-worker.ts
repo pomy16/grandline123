@@ -23,9 +23,9 @@ export const scanWorker = new Worker(
   },
   {
     connection: redisConnection,
-    concurrency: 3,
+    concurrency: workerConfig.queueConcurrency,
     limiter: {
-      max: 30,
+      max: workerConfig.rateLimitRequestsPerMinute,
       duration: 60_000
     }
   }

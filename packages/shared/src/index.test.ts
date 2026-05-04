@@ -9,6 +9,8 @@ describe("shared normalization utilities", () => {
   it("parses common European and US price formats", () => {
     expect(parsePrice("€129,99")).toBe(129.99);
     expect(parsePrice("$1,249.95")).toBe(1249.95);
+    expect(parsePrice("1 499 Kč")).toBe(1499);
+    expect(parsePrice("invalid")).toBeNull();
   });
 
   it("normalizes URLs and strips fragments", () => {
@@ -52,5 +54,63 @@ describe("shared normalization utilities", () => {
         }
       )
     ).toBe(true);
+  });
+
+  it("rejects keyword matches when an exclude keyword is present", () => {
+    expect(
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: ["booster"],
+          excludeKeywords: ["resealed"],
+          game: "POKEMON",
+          caseInsensitive: true
+        },
+        {
+          title: "Pokemon booster box resealed",
+          normalizedTitle: "pokemon booster box resealed",
+          price: 89.99,
+          game: "POKEMON"
+        }
+      )
+    ).toBe(false);
+  });
+
+  it("supports fuzzy keyword matching for compact product titles", () => {
+    expect(
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: ["starter deck"],
+          excludeKeywords: [],
+          game: "ONE_PIECE",
+          fuzzyMatching: true
+        },
+        {
+          title: "One Piece StarterDeck ST-13",
+          normalizedTitle: "one piece starterdeck st 13",
+          price: 14.99,
+          game: "ONE_PIECE"
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("does not match outside min and max price bounds", () => {
+    expect(
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: ["elite trainer box"],
+          excludeKeywords: [],
+          game: "POKEMON",
+          minPrice: 40,
+          maxPrice: 60
+        },
+        {
+          title: "Pokemon Elite Trainer Box",
+          normalizedTitle: "pokemon elite trainer box",
+          price: 69.99,
+          game: "POKEMON"
+        }
+      )
+    ).toBe(false);
   });
 });

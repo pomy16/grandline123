@@ -5,7 +5,9 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
+    "pretest": "npm run build -w packages/shared",
     "start": "node dist/index.js",
     "test": "vitest run"
   },

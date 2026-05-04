@@ -20,11 +20,23 @@ export function signSession(payload: { userId: string; email: string }, secret: 
   return `${encoded}.${signature}`;
 }
 
-export function verifySession(token: string, secret: string): { userId: string; email: string } | null {
+function safeEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+export function verifySession(token: string, secret: string, ttlSeconds = 24 * 60 * 60): { userId: string; email: string } | null {
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
   const expected = createHmac("sha256", secret).update(encoded).digest("base64url");
-  if (expected !== signature) return null;
-  const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as { userId: string; email: string };
-  return { userId: decoded.userId, email: decoded.email };
+  if (!safeEqual(expected, signature)) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as { userId: string; email: string; issuedAt?: number };
+    if (!decoded.userId || !decoded.email || !decoded.issuedAt) return null;
+    if (Date.now() - decoded.issuedAt > ttlSeconds * 1000) return null;
+    return { userId: decoded.userId, email: decoded.email };
+  } catch {
+    return null;
+  }
 }

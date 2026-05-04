@@ -9,10 +9,10 @@ export const redisConnection = new IORedis(env.redisUrl, {
 export const scanQueue = new Queue("store-scans", {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 3,
+    attempts: env.queueJobAttempts,
     backoff: {
       type: "exponential",
-      delay: 5_000
+      delay: env.queueBackoffMs
     },
     removeOnComplete: 100,
     removeOnFail: 250

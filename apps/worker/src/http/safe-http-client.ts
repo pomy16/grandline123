@@ -167,6 +167,9 @@ export class SafeHttpClient {
           durationMs: result.durationMs
         });
       } catch (error) {
+        if (error instanceof MonitorRequestError && error.details.status && ![408, 429, 500, 502, 503, 504].includes(error.details.status)) {
+          throw error;
+        }
         lastError = error;
       } finally {
         clearTimeout(timeout);

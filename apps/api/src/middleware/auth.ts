@@ -5,7 +5,7 @@ import { verifySession } from "../services/auth";
 export function optionalAuth(request: Request, _response: Response, next: NextFunction) {
   const header = request.headers.authorization;
   if (header?.startsWith("Bearer ")) {
-    const session = verifySession(header.slice("Bearer ".length), env.jwtSecret);
+    const session = verifySession(header.slice("Bearer ".length), env.jwtSecret, env.sessionTtlSeconds);
     if (session) {
       request.user = session;
     }

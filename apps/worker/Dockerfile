@@ -9,4 +9,5 @@ COPY packages/shared/package*.json packages/shared/
 RUN npm install
 COPY . .
 RUN npm run prisma:generate
-CMD ["npm", "run", "dev", "-w", "apps/worker"]
+RUN npm run build -w packages/shared && npm run build -w apps/worker
+CMD ["npm", "run", "start", "-w", "apps/worker"]
