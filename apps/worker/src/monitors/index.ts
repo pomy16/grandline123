@@ -13,5 +13,5 @@ export function createMonitor(mode: MonitorMode): StoreMonitor {
   if (mode === "SITEMAP") return new SitemapMonitor();
   if (mode === "RSS") return new RssMonitor();
   if (mode === "PLAYWRIGHT") return new PlaywrightMonitor();
-  return new MockMonitor();
+  throw new Error(`Unsupported monitor mode: ${mode}`);
 }

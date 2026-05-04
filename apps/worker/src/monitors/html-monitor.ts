@@ -13,7 +13,7 @@ import {
 
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
   const title = selectorText(html, storeConfig.selectors?.title) ?? selectorText(html, "h1");
-  const href = selectorHref(html, storeConfig.selectors?.productUrl) ?? pageUrl;
+  const href = selectorHref(html, storeConfig.selectors?.productUrl);
   if (!title || !href) return null;
   const priceText = selectorText(html, storeConfig.selectors?.price);
   const stockText = [selectorText(html, storeConfig.selectors?.stockStatus), selectorText(html, storeConfig.selectors?.preorderStatus)].filter(Boolean).join(" ");
