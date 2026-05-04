@@ -1,10 +1,10 @@
-import type { MonitorMode, StoreMonitor } from "@tcg-monitor/shared";
+import type { MonitorMode, NormalizedProduct, StoreConfig, StoreMonitor } from "@tcg-monitor/shared";
 import { MockMonitor } from "./mock-monitor";
 
 class NotImplementedMonitor implements StoreMonitor {
   constructor(private readonly mode: MonitorMode) {}
 
-  async scan() {
+  async scan(_storeConfig: StoreConfig): Promise<NormalizedProduct[]> {
     throw new Error(`${this.mode} monitor is planned for Phase 4. Phase 1 only enables MOCK scans.`);
   }
 }

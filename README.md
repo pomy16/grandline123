@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-This first delivery implements **Phase 1 only**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, and test setup. Real store scraping adapters are intentionally not implemented yet.
+The current delivery includes **Phase 1 and Phase 2**: project structure, Prisma database model, Docker Compose, backend API skeleton, worker skeleton, mocked scanner, Discord webhook test path, dashboard skeleton, seed data, test setup, and live admin workflows for stores, keyword rules, products, scan history, and mocked scanner runs. Real store scraping adapters are intentionally not implemented yet.
 
 ## Safety and Compliance
 
@@ -77,6 +77,32 @@ docker-compose.yml
 - Docker Compose for PostgreSQL, Redis, API, worker, and web.
 - Seed data with disabled demo store, keyword rules, placeholder webhook, demo product, and demo event.
 - Initial Vitest setup for shared normalization utilities.
+
+## Phase 2 Features
+
+- Admin login UI stores a bearer token in local browser storage.
+- Store management UI:
+  - create stores
+  - edit stores
+  - pause and resume stores
+  - delete stores
+  - configure listing URLs, monitor mode, polling interval, currency, country, language, request headers, selectors, notes, trusted flag, and public cart URL
+  - trigger manual mock scans
+- Keyword rules UI:
+  - create, edit, and delete rules
+  - include and exclude keywords
+  - game, category, min and max price, priority, webhook target, cooldown, case-insensitive matching, and fuzzy matching flags
+- Product database UI:
+  - searchable product list
+  - filters for store, game, stock status, category, price, and first seen date
+  - product image thumbnails
+  - current and previous price
+  - stock status badges
+  - open product button
+  - queue test alert button
+  - ignore product button
+- Live event timeline and logs pages backed by the API.
+- Mock scanner now applies active keyword rules to scanned products before persistence.
 
 ## Environment Variables
 
@@ -177,6 +203,14 @@ curl -X POST http://localhost:4000/api/stores/seed-mock-store/scan \
 
 The worker will create or update demo products, create snapshots, create product events, and write scan logs.
 
+From the dashboard:
+
+1. Sign in at [http://localhost:3000/login](http://localhost:3000/login).
+2. Open the Stores page.
+3. Create or edit a store with `MOCK` mode.
+4. Click `Scan`.
+5. Check Products, Events, and Logs.
+
 ## Discord Webhook Test
 
 Configure an active webhook in the database or through the Settings API, then call:
@@ -274,7 +308,7 @@ Confirm the webhook URL is valid, active, and not a placeholder. Discord may als
 
 ## Roadmap
 
-Phase 2 will implement real store management flows, keyword rule CRUD UI, product database views, and deeper mocked scanner integration.
+Phase 2 implemented real store management flows, keyword rule CRUD UI, product database views, and deeper mocked scanner integration.
 
 Phase 3 will implement Discord webhook routing, event cooldowns, and duplicate alert prevention.
 

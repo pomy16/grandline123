@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferGame, normalizeTitle, normalizeUrl, parsePrice, productIdentityKey } from "./index";
+import { inferGame, keywordRuleMatchesProduct, normalizeTitle, normalizeUrl, parsePrice, productIdentityKey } from "./index";
 
 describe("shared normalization utilities", () => {
   it("normalizes accented and punctuated titles", () => {
@@ -32,5 +32,25 @@ describe("shared normalization utilities", () => {
         "store-1"
       )
     ).toContain("store-1");
+  });
+
+  it("matches keyword rules with include, exclude, game, and price filters", () => {
+    expect(
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: ["booster box"],
+          excludeKeywords: ["damaged"],
+          game: "POKEMON",
+          minPrice: 50,
+          maxPrice: 150
+        },
+        {
+          title: "Pokemon TCG Booster Box",
+          normalizedTitle: "pokemon tcg booster box",
+          price: 119.99,
+          game: "POKEMON"
+        }
+      )
+    ).toBe(true);
   });
 });
