@@ -4,6 +4,7 @@ import type { EventType, NormalizedProduct } from "@tcg-monitor/shared";
 import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
 import { prisma } from "../prisma";
+import { notifyProductEvent } from "./notifications";
 import { toStoreConfig } from "./store-config";
 
 function stateHash(product: NormalizedProduct, eventType: EventType): string {
@@ -42,6 +43,17 @@ function detectEvents(existing: Product | null, incoming: NormalizedProduct): Ev
   }
 
   return events;
+}
+
+function rawField(product: NormalizedProduct, key: string): string | number | boolean | null {
+  if (typeof product.rawData !== "object" || product.rawData === null || !(key in product.rawData)) {
+    return null;
+  }
+  const value = product.rawData[key as keyof typeof product.rawData];
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return null;
 }
 
 async function persistProduct(store: Store, incoming: NormalizedProduct) {
@@ -142,7 +154,12 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
           },
           metadata: {
             stateHash: stateHash(incoming, type),
-            phase: "phase-1-mock-scanner"
+            phase: "phase-3-discord-notifications",
+            matchedKeywordRuleId: rawField(incoming, "matchedKeywordRuleId"),
+            matchedKeywordRuleName: rawField(incoming, "matchedKeywordRuleName"),
+            matchedKeywordRulePriority: rawField(incoming, "matchedKeywordRulePriority"),
+            matchedKeywordRuleWebhookTarget: rawField(incoming, "matchedKeywordRuleWebhookTarget"),
+            matchedKeywordRuleCooldownSeconds: rawField(incoming, "matchedKeywordRuleCooldownSeconds")
           }
         }
       })
@@ -183,7 +200,10 @@ async function applyKeywordRules(products: NormalizedProduct[]) {
           rawData: {
             ...(typeof product.rawData === "object" && product.rawData !== null ? product.rawData : {}),
             matchedKeywordRuleId: rule.id,
-            matchedKeywordRuleName: rule.name
+            matchedKeywordRuleName: rule.name,
+            matchedKeywordRulePriority: rule.priority,
+            matchedKeywordRuleWebhookTarget: rule.webhookTarget,
+            matchedKeywordRuleCooldownSeconds: rule.cooldownSeconds
           }
         }
       : product;
@@ -209,6 +229,9 @@ export async function scanStore(storeId: string, scanJobId?: string) {
     for (const product of products) {
       const result = await persistProduct(store, product);
       eventsCreated += result.events.length;
+      for (const event of result.events) {
+        await notifyProductEvent(event.id);
+      }
     }
 
     const finishedAt = new Date();

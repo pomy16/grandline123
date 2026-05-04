@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { EventType, WebhookTarget } from "@tcg-monitor/shared";
+import type { AlertPriority, EventType, Game, WebhookTarget } from "@tcg-monitor/shared";
 import { prisma } from "../prisma";
 
 const colors: Record<EventType, number> = {
@@ -22,6 +22,8 @@ export function buildDiscordPayload(input: {
   imageUrl?: string | null;
   productUrl: string;
   category?: string | null;
+  game?: Game | null;
+  priority?: AlertPriority | null;
 }) {
   return {
     embeds: [
@@ -38,6 +40,8 @@ export function buildDiscordPayload(input: {
           ...(input.oldPrice ? [{ name: "Old price", value: input.oldPrice, inline: true }] : []),
           { name: "Stock", value: input.stockStatus ?? "Unknown", inline: true },
           { name: "Category", value: input.category ?? "Uncategorized", inline: true },
+          { name: "Game", value: input.game ?? "UNKNOWN", inline: true },
+          { name: "Priority", value: input.priority ?? "NORMAL", inline: true },
           { name: "Quick actions", value: `[Open product](${input.productUrl})`, inline: false }
         ],
         footer: { text: "TCG Monitor - purchase assist only" }
@@ -52,26 +56,80 @@ export async function sendWebhook(params: {
   eventId?: string;
   productId?: string;
   payload: unknown;
+  payloadHash?: string;
 }) {
-  const payloadHash = createHash("sha256").update(JSON.stringify(params.payload)).digest("hex");
-  const response = await fetch(params.webhookUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(params.payload)
-  });
+  const payloadHash = params.payloadHash ?? createHash("sha256").update(JSON.stringify(params.payload)).digest("hex");
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.DISCORD_TIMEOUT_MS ?? 10_000));
 
-  await prisma.notificationLog.create({
-    data: {
-      eventId: params.eventId,
-      productId: params.productId,
-      target: params.target,
-      status: response.ok ? "SENT" : "FAILED",
-      payloadHash,
-      response: { status: response.status, statusText: response.statusText },
-      sentAt: response.ok ? new Date() : null,
-      error: response.ok ? null : `Discord returned ${response.status}`
+  try {
+    const response = await fetch(params.webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(params.payload),
+      signal: controller.signal
+    });
+    const responseText = await response.text().catch(() => "");
+    const durationMs = Date.now() - startedAt;
+
+    await prisma.notificationLog.create({
+      data: {
+        eventId: params.eventId,
+        productId: params.productId,
+        target: params.target,
+        status: response.ok ? "SENT" : "FAILED",
+        payloadHash,
+        response: {
+          status: response.status,
+          statusText: response.statusText,
+          durationMs,
+          body: responseText.slice(0, 500)
+        },
+        sentAt: response.ok ? new Date() : null,
+        error: response.ok ? null : `Discord returned ${response.status}: ${responseText.slice(0, 160)}`
+      }
+    });
+
+    if (!response.ok) {
+      await prisma.scanLog.create({
+        data: {
+          severity: "ERROR",
+          message: `Discord delivery failed for ${params.target}.`,
+          context: {
+            eventId: params.eventId,
+            productId: params.productId,
+            status: response.status,
+            statusText: response.statusText,
+            durationMs
+          }
+        }
+      });
     }
-  });
 
-  return response.ok;
+    return { ok: response.ok, status: response.status, payloadHash, target: params.target };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Discord delivery error";
+    await prisma.notificationLog.create({
+      data: {
+        eventId: params.eventId,
+        productId: params.productId,
+        target: params.target,
+        status: "FAILED",
+        payloadHash,
+        error: message,
+        response: { durationMs: Date.now() - startedAt }
+      }
+    });
+    await prisma.scanLog.create({
+      data: {
+        severity: "ERROR",
+        message: `Discord delivery error for ${params.target}: ${message}`,
+        context: { eventId: params.eventId, productId: params.productId }
+      }
+    });
+    return { ok: false, status: 0, payloadHash, target: params.target, error: message };
+  } finally {
+    clearTimeout(timeout);
+  }
 }

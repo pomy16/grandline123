@@ -24,3 +24,15 @@ logsRouter.get("/scan-jobs", async (_request, response) => {
   });
   response.json({ data: jobs });
 });
+
+logsRouter.get("/notifications", async (_request, response) => {
+  const logs = await prisma.notificationLog.findMany({
+    include: {
+      product: { include: { store: true } },
+      event: true
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200
+  });
+  response.json({ data: logs });
+});
