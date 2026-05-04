@@ -1,0 +1,152 @@
+import type { NormalizedProduct, StockStatus, StoreConfig } from "@tcg-monitor/shared";
+import { inferGame, normalizeTitle, normalizeUrl, parsePrice } from "@tcg-monitor/shared";
+
+export function decodeEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function stripHtml(value: string) {
+  return decodeEntities(value.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " "));
+}
+
+export function attrValue(tag: string, attr: string) {
+  const match = tag.match(new RegExp(`${attr}\\s*=\\s*["']([^"']+)["']`, "i"));
+  return match?.[1] ? decodeEntities(match[1]) : null;
+}
+
+export function normalizeStockStatus(value: unknown): { stockStatus: StockStatus; isAvailable: boolean; isPreorder: boolean } {
+  const normalized = String(value ?? "").toLowerCase();
+  const preorder = /pre[\s-]?order|předobjed|reservation|reserve/.test(normalized);
+  const out = /out of stock|sold out|unavailable|not available|vyprod|ausverkauft|non disponible/.test(normalized);
+  const inStock = /in stock|available|skladem|lager|add to cart|buy now/.test(normalized);
+  if (preorder) return { stockStatus: "PREORDER", isAvailable: true, isPreorder: true };
+  if (out) return { stockStatus: "OUT_OF_STOCK", isAvailable: false, isPreorder: false };
+  if (inStock || value === true) return { stockStatus: "IN_STOCK", isAvailable: true, isPreorder: false };
+  return { stockStatus: "UNKNOWN", isAvailable: false, isPreorder: false };
+}
+
+export function pickString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return null;
+}
+
+export function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["products", "items", "data", "results", "nodes"]) {
+      if (Array.isArray(record[key])) return record[key] as unknown[];
+    }
+  }
+  return [];
+}
+
+export function productFromUnknown(item: unknown, storeConfig: StoreConfig, source: string): NormalizedProduct | null {
+  if (!item || typeof item !== "object") return null;
+  const record = item as Record<string, unknown>;
+  const offers = record.offers && typeof record.offers === "object" ? (Array.isArray(record.offers) ? record.offers[0] : record.offers) : null;
+  const offer = offers && typeof offers === "object" ? (offers as Record<string, unknown>) : {};
+  const imageCandidate = Array.isArray(record.image) ? record.image[0] : record.image;
+  const title = pickString(record.title, record.name, record.productName, record.headline);
+  const url = pickString(record.url, record.productUrl, record.link, record["@id"], offer.url);
+  if (!title || !url) return null;
+  const stock = normalizeStockStatus(pickString(record.stockStatus, record.availability, record.available, record.inStock, offer.availability) ?? record.isAvailable);
+  const priceValue = record.price ?? record.salePrice ?? record.currentPrice ?? offer.price;
+  const price = typeof priceValue === "number" ? priceValue : priceValue ? parsePrice(String(priceValue)) : null;
+  const canonicalUrl = normalizeUrl(url, storeConfig.baseUrl);
+
+  return {
+    title,
+    normalizedTitle: normalizeTitle(title),
+    url: canonicalUrl,
+    canonicalUrl,
+    imageUrl: pickString(record.imageUrl, imageCandidate, record.thumbnail, record.thumbnailUrl),
+    price,
+    currency: pickString(record.currency, record.priceCurrency, offer.priceCurrency) ?? storeConfig.currency,
+    ...stock,
+    sku: pickString(record.sku, record.mpn, record.productCode),
+    ean: pickString(record.ean, record.gtin, record.gtin13, record.barcode),
+    category: pickString(record.category, record.productType, record.collection),
+    game: inferGame(title),
+    rawData: { source, item }
+  };
+}
+
+export function uniqueProducts(products: NormalizedProduct[]) {
+  const seen = new Set<string>();
+  return products.filter((product) => {
+    const key = `${product.canonicalUrl}|${product.sku ?? ""}|${product.ean ?? ""}|${product.normalizedTitle}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function extractJsonLd(html: string): unknown[] {
+  const items: unknown[] = [];
+  const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
+  for (const script of scripts) {
+    const raw = script.replace(/^<script[^>]*>/i, "").replace(/<\/script>$/i, "").trim();
+    try {
+      const parsed = JSON.parse(raw);
+      const values = Array.isArray(parsed) ? parsed : [parsed];
+      for (const value of values) {
+        if (value && typeof value === "object" && "@graph" in value && Array.isArray((value as { "@graph": unknown[] })["@graph"])) {
+          items.push(...(value as { "@graph": unknown[] })["@graph"]);
+        } else {
+          items.push(value);
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return items;
+}
+
+export function selectorText(html: string, selector?: string | null) {
+  if (!selector) return null;
+  if (selector.startsWith("meta[")) {
+    const property = selector.match(/(?:property|name)=["']?([^"'\]]+)/i)?.[1];
+    if (!property) return null;
+    const tag = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*>`, "i"))?.[0];
+    return tag ? attrValue(tag, "content") : null;
+  }
+  if (selector.startsWith(".")) {
+    const className = selector.slice(1);
+    const match = html.match(new RegExp(`<([a-z0-9-]+)[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>[\\s\\S]*?<\\/\\1>`, "i"));
+    return match?.[0] ? stripHtml(match[0]) : null;
+  }
+  if (selector.startsWith("#")) {
+    const id = selector.slice(1);
+    const match = html.match(new RegExp(`<([a-z0-9-]+)[^>]*id=["']${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*>[\\s\\S]*?<\\/\\1>`, "i"));
+    return match?.[0] ? stripHtml(match[0]) : null;
+  }
+  const match = html.match(new RegExp(`<${selector}[^>]*>[\\s\\S]*?<\\/${selector}>`, "i"));
+  return match?.[0] ? stripHtml(match[0]) : null;
+}
+
+export function selectorHref(html: string, selector?: string | null) {
+  if (!selector) return null;
+  const tag = selector.startsWith(".")
+    ? html.match(new RegExp(`<a[^>]*class=["'][^"']*\\b${selector.slice(1)}\\b[^"']*["'][^>]*>`, "i"))?.[0]
+    : html.match(/<a[^>]+href=["'][^"']+["'][^>]*>/i)?.[0];
+  return tag ? attrValue(tag, "href") : null;
+}
+
+export function selectorImage(html: string, selector?: string | null) {
+  const tag = selector?.startsWith(".")
+    ? html.match(new RegExp(`<img[^>]*class=["'][^"']*\\b${selector.slice(1)}\\b[^"']*["'][^>]*>`, "i"))?.[0]
+    : html.match(/<img[^>]+src=["'][^"']+["'][^>]*>/i)?.[0];
+  return tag ? attrValue(tag, "src") : null;
+}

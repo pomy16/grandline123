@@ -15,6 +15,7 @@ type ScanLog = {
   severity: string;
   message: string;
   createdAt: string;
+  context?: unknown;
   store?: { name: string } | null;
 };
 
@@ -101,6 +102,11 @@ export default function LogsPage() {
                     </div>
                     <div className="mt-2">{log.message}</div>
                     <div className="text-xs text-muted-foreground">{log.store?.name ?? "System"}</div>
+                    {log.context ? (
+                      <pre className="mt-3 max-h-40 overflow-auto rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                        {JSON.stringify(log.context, null, 2)}
+                      </pre>
+                    ) : null}
                   </div>
                 ))}
                 {logs.length === 0 && !loading ? <div className="text-sm text-muted-foreground">No logs found.</div> : null}
