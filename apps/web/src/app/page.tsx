@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Bell, Boxes, CircleDollarSign, RotateCcw, Store, TrendingDown, Zap } from "lucide-react";
 import { AuthGate } from "../components/auth-gate";
-import { DemoProductTable } from "../components/data-table";
+import { DashboardProductTable, type DashboardProductRow } from "../components/data-table";
 import { MetricCard } from "../components/metric-card";
 import { PageHeader } from "../components/page-header";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { ErrorState, LoadingState } from "../components/ui/data-state";
 import { apiFetch } from "../lib/api-client";
 import type { DashboardSummary } from "../lib/api";
+import { formatDateTime } from "../lib/format";
 
 const emptySummary: DashboardSummary = {
   totalStores: 0,
@@ -24,12 +26,29 @@ const emptySummary: DashboardSummary = {
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
+  const [products, setProducts] = useState<DashboardProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadDashboard() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [summaryPayload, productPayload] = await Promise.all([
+        apiFetch<{ data: DashboardSummary }>("/api/dashboard"),
+        apiFetch<{ data: DashboardProductRow[] }>("/api/products?pageSize=8&sortBy=lastSeenAt&sortOrder=desc")
+      ]);
+      setSummary(summaryPayload.data);
+      setProducts(productPayload.data);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    apiFetch<{ data: DashboardSummary }>("/api/dashboard")
-      .then((payload) => setSummary(payload.data))
-      .finally(() => setLoading(false));
+    loadDashboard();
   }, []);
 
   return (
@@ -39,6 +58,7 @@ export default function DashboardPage() {
         description="Operational overview for Pokemon TCG and One Piece Card Game product discovery, restocks, price changes, and notification delivery."
       />
       <AuthGate>
+        {error ? <div className="mb-4"><ErrorState message={error} onRetry={loadDashboard} /></div> : null}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Total monitored stores" value={loading ? "..." : summary.totalStores} icon={Store} />
           <MetricCard label="Active stores" value={loading ? "..." : summary.activeStores} icon={Zap} />
@@ -56,7 +76,7 @@ export default function DashboardPage() {
               <CardTitle>Latest products</CardTitle>
             </CardHeader>
             <CardContent>
-              <DemoProductTable />
+              <DashboardProductTable rows={products} loading={loading} />
             </CardContent>
           </Card>
           <Card>
@@ -64,12 +84,13 @@ export default function DashboardPage() {
               <CardTitle>Latest events</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {summary.latestEvents.length === 0 ? <div className="text-sm text-muted-foreground">No events yet. Run a mock scan from Stores.</div> : null}
+              {loading ? <LoadingState label="Loading latest events..." /> : null}
+              {summary.latestEvents.length === 0 && !loading ? <div className="text-sm text-muted-foreground">No events yet. Run a manual scan from Stores.</div> : null}
               {summary.latestEvents.map((event) => (
                 <div key={event.id} className="rounded-md border border-border bg-background p-3">
                   <div className="flex items-center justify-between gap-3">
                     <Badge tone="info">{event.type}</Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(event.createdAt).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)}</span>
                   </div>
                   <div className="mt-2 text-sm font-medium">{event.product.title}</div>
                   <div className="text-xs text-muted-foreground">{event.product.store.name}</div>

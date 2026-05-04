@@ -13,24 +13,45 @@ const items = [
 
 export function Sidebar() {
   return (
-    <aside className="hidden min-h-screen w-64 border-r border-border bg-card/80 p-4 lg:block">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <BookOpenCheck size={20} aria-hidden />
+    <>
+      <header className="border-b border-border bg-card/90 p-3 lg:hidden">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <BookOpenCheck size={18} aria-hidden />
+          </div>
+          <div>
+            <div className="font-semibold">TCG Monitor</div>
+            <div className="text-xs text-muted-foreground">Purchase assist only</div>
+          </div>
         </div>
-        <div>
-          <div className="font-semibold">TCG Monitor</div>
-          <div className="text-xs text-muted-foreground">Purchase assist only</div>
+        <nav className="flex gap-2 overflow-x-auto pb-1">
+          {items.map((item) => (
+            <Link key={item.href} href={item.href} className="flex shrink-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+              <item.icon size={16} aria-hidden />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
+      <aside className="hidden min-h-screen w-64 border-r border-border bg-card/80 p-4 lg:block">
+        <div className="mb-8 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <BookOpenCheck size={20} aria-hidden />
+          </div>
+          <div>
+            <div className="font-semibold">TCG Monitor</div>
+            <div className="text-xs text-muted-foreground">Purchase assist only</div>
+          </div>
         </div>
-      </div>
-      <nav className="space-y-1">
-        {items.map((item) => (
-          <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
-            <item.icon size={16} aria-hidden />
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-    </aside>
+        <nav className="space-y-1">
+          {items.map((item) => (
+            <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+              <item.icon size={16} aria-hidden />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }

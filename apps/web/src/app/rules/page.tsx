@@ -96,6 +96,8 @@ export default function RulesPage() {
   }
 
   async function deleteRule(ruleId: string) {
+    const rule = rules.find((item) => item.id === ruleId);
+    if (!window.confirm(`Delete rule "${rule?.name ?? "selected rule"}"? Matching and routing behavior will update immediately.`)) return;
     await apiFetch(`/api/rules/${ruleId}`, { method: "DELETE" });
     setMessage("Rule deleted.");
     await loadRules();

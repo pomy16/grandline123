@@ -5,6 +5,14 @@ import { scanQueue } from "../lib/queue";
 
 export const storesRouter = Router();
 
+const storeSortFields = new Set(["name", "mode", "active", "lastScanAt", "nextScanAt", "repeatedFailureCount", "createdAt", "updatedAt"]);
+
+function pagination(query: Record<string, unknown>) {
+  const page = Math.max(Number(query.page ?? 1), 1);
+  const pageSize = Math.min(Math.max(Number(query.pageSize ?? 20), 5), 100);
+  return { page, pageSize, skip: (page - 1) * pageSize };
+}
+
 function parseStringList(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (typeof value === "string") {
@@ -41,12 +49,36 @@ function storePayload(body: Record<string, unknown>) {
   };
 }
 
-storesRouter.get("/", async (_request, response) => {
-  const stores = await prisma.store.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { products: true } } }
-  });
-  response.json({ data: stores });
+storesRouter.get("/", async (request, response) => {
+  const { page, pageSize, skip } = pagination(request.query);
+  const sortBy = typeof request.query.sortBy === "string" && storeSortFields.has(request.query.sortBy) ? request.query.sortBy : "createdAt";
+  const sortOrder = request.query.sortOrder === "asc" ? "asc" : "desc";
+  const q = typeof request.query.q === "string" ? request.query.q.trim() : "";
+  const status = typeof request.query.status === "string" ? request.query.status : "";
+  const mode = typeof request.query.mode === "string" ? request.query.mode : "";
+  const where: Prisma.StoreWhereInput = {
+    mode: mode in MonitorMode ? (mode as MonitorMode) : undefined,
+    active: status === "active" ? true : status === "paused" ? false : undefined,
+    lastError: status === "error" ? { not: null } : undefined,
+    OR: q
+      ? [
+          { name: { contains: q, mode: "insensitive" } },
+          { baseUrl: { contains: q, mode: "insensitive" } },
+          { notes: { contains: q, mode: "insensitive" } }
+        ]
+      : undefined
+  };
+  const [stores, total] = await Promise.all([
+    prisma.store.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      include: { _count: { select: { products: true, scanJobs: true } } },
+      skip,
+      take: pageSize
+    }),
+    prisma.store.count({ where })
+  ]);
+  response.json({ data: stores, meta: { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) } });
 });
 
 storesRouter.post("/", async (request, response) => {
@@ -64,7 +96,10 @@ storesRouter.post("/", async (request, response) => {
 storesRouter.get("/:id", async (request, response) => {
   const store = await prisma.store.findUnique({
     where: { id: request.params.id },
-    include: { products: { take: 20, orderBy: { lastSeenAt: "desc" } } }
+    include: {
+      products: { take: 20, orderBy: { lastSeenAt: "desc" } },
+      scanJobs: { take: 20, orderBy: { createdAt: "desc" } }
+    }
   });
   if (!store) {
     response.status(404).json({ error: "Store not found." });
@@ -93,6 +128,14 @@ storesRouter.post("/:id/pause", async (request, response) => {
 
 storesRouter.post("/:id/resume", async (request, response) => {
   const store = await prisma.store.update({ where: { id: request.params.id }, data: { active: true } });
+  response.json({ data: store });
+});
+
+storesRouter.post("/:id/clear-error", async (request, response) => {
+  const store = await prisma.store.update({
+    where: { id: request.params.id },
+    data: { lastError: null, repeatedFailureCount: 0, autoPausedAfterFailures: false }
+  });
   response.json({ data: store });
 });
 
