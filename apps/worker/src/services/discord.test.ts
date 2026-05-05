@@ -20,4 +20,20 @@ describe("Discord webhook payload formatting", () => {
     expect(payload.embeds[0].fields).toContainEqual({ name: "Quick actions", value: "[Open product](https://example.com/product)", inline: false });
     expect(JSON.stringify(payload).toLowerCase()).not.toContain("checkout");
   });
+
+  it("adds a manual add-to-cart shortcut only when publicCartUrl exists", () => {
+    const payload = buildDiscordPayload({
+      eventType: "RESTOCK",
+      productTitle: "Pokemon TCG Booster Box",
+      storeName: "Demo Store",
+      productUrl: "https://example.com/product",
+      publicCartUrl: "https://example.com/basket/add/?product_id=123"
+    });
+
+    expect(payload.embeds[0].fields).toContainEqual({
+      name: "Quick actions",
+      value: "[Open product](https://example.com/product) | [Add to cart](https://example.com/basket/add/?product_id=123)",
+      inline: false
+    });
+  });
 });

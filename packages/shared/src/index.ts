@@ -27,6 +27,7 @@ export interface NormalizedProduct {
   url: string;
   canonicalUrl: string;
   imageUrl?: string | null;
+  publicCartUrl?: string | null;
   price?: number | null;
   currency: string;
   stockStatus: StockStatus;

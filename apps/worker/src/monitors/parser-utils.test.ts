@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StoreConfig } from "@tcg-monitor/shared";
-import { productFromUnknown, uniqueProducts } from "./parser-utils";
+import { productLinks, productsFromHtmlDocument, publicCartLink } from "./html-monitor";
+import { isPurchaseAssistUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
 
 const store: StoreConfig = {
   id: "store-1",
@@ -47,5 +48,63 @@ describe("product parser normalization", () => {
 
     expect(unique).toHaveLength(1);
     expect(unique[0].canonicalUrl).toBe("https://shop.example/op-starter");
+  });
+
+  it("rejects cart, add, basket, and checkout URLs as product URLs", () => {
+    expect(isPurchaseAssistUrl("https://www.dracik.cz/basket/add/?product_id=64044", store.baseUrl)).toBe(true);
+    expect(isPurchaseAssistUrl("https://shop.example/cart/add?id=1", store.baseUrl)).toBe(true);
+    expect(isPurchaseAssistUrl("https://shop.example/checkout", store.baseUrl)).toBe(true);
+    expect(productLinks('<a href="/basket/add/?product_id=64044">Buy</a><a href="/pokemon-booster">Pokemon Booster</a>', store)).toEqual([
+      "https://shop.example/pokemon-booster"
+    ]);
+    expect(productFromUnknown({ name: "Pokemon Booster", url: "/basket/add/?product_id=64044" }, store, "html-monitor-jsonld")).toBeNull();
+  });
+
+  it("stores public add-to-cart links only as purchase-assist metadata on valid products", () => {
+    const product = productFromUnknown(
+      {
+        name: "Pokemon TCG Booster Box",
+        productUrl: "/pokemon-booster-box",
+        addToCartUrl: "/basket/add/?product_id=64044",
+        price: "1 499 Kč"
+      },
+      store,
+      "html-monitor-jsonld"
+    );
+
+    expect(product).toMatchObject({
+      canonicalUrl: "https://shop.example/pokemon-booster-box",
+      publicCartUrl: "https://shop.example/basket/add/?product_id=64044"
+    });
+  });
+
+  it("skips generic homepage/category entries instead of persisting fake products", () => {
+    expect(productFromUnknown({ name: "Demo Store", url: "https://shop.example/" }, store, "html-monitor-jsonld")).toBeNull();
+    expect(productFromUnknown({ name: "Pokemon", url: "https://shop.example/products" }, store, "html-monitor-jsonld")).toBeNull();
+  });
+
+  it("keeps Knihy Dobrovsky-style product JSON-LD valid", () => {
+    const product = productsFromHtmlDocument(
+      `<script type="application/ld+json">
+        {"@type":"Product","name":"Pokémon TCG: Scarlet & Violet booster","url":"/pokemon-tcg/scarlet-violet-booster-123","image":"https://shop.example/img.jpg","offers":{"price":"119","priceCurrency":"CZK","availability":"https://schema.org/InStock"}}
+      </script>`,
+      { ...store, name: "Knihy Dobrovský", baseUrl: "https://www.knihydobrovsky.cz", listingUrls: ["https://www.knihydobrovsky.cz/pokemon-tcg"], currency: "CZK" },
+      "https://www.knihydobrovsky.cz/pokemon-tcg",
+      "html-monitor-jsonld"
+    );
+
+    expect(product[0]).toMatchObject({
+      title: "Pokémon TCG: Scarlet & Violet booster",
+      canonicalUrl: "https://www.knihydobrovsky.cz/pokemon-tcg/scarlet-violet-booster-123",
+      price: 119,
+      game: "POKEMON"
+    });
+  });
+
+  it("can find a public cart shortcut without treating it as a product link", () => {
+    const html = '<a href="/pokemon-booster">Pokemon Booster</a><a href="/basket/add/?product_id=64044">Do kosiku</a>';
+
+    expect(productLinks(html, store)).toEqual(["https://shop.example/pokemon-booster"]);
+    expect(publicCartLink(html, store)).toBe("https://shop.example/basket/add/?product_id=64044");
   });
 });
