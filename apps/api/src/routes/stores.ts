@@ -38,6 +38,7 @@ function storePayload(body: Record<string, unknown>) {
     active: Boolean(body.active),
     trusted: Boolean(body.trusted),
     publicCartUrl: typeof body.publicCartUrl === "string" && body.publicCartUrl.length > 0 ? body.publicCartUrl : null,
+    discordWebhookId: typeof body.discordWebhookId === "string" && body.discordWebhookId.length > 0 ? body.discordWebhookId : null,
     requestHeaders: body.requestHeaders ? (body.requestHeaders as Prisma.InputJsonValue) : undefined,
     selectorProductUrl: typeof body.selectorProductUrl === "string" ? body.selectorProductUrl : null,
     selectorTitle: typeof body.selectorTitle === "string" ? body.selectorTitle : null,
@@ -72,7 +73,7 @@ storesRouter.get("/", async (request, response) => {
     prisma.store.findMany({
       where,
       orderBy: { [sortBy]: sortOrder },
-      include: { _count: { select: { products: true, scanJobs: true } } },
+      include: { discordWebhook: true, _count: { select: { products: true, scanJobs: true } } },
       skip,
       take: pageSize
     }),
@@ -98,7 +99,8 @@ storesRouter.get("/:id", async (request, response) => {
     where: { id: request.params.id },
     include: {
       products: { take: 20, orderBy: { lastSeenAt: "desc" } },
-      scanJobs: { take: 20, orderBy: { createdAt: "desc" } }
+      scanJobs: { take: 20, orderBy: { createdAt: "desc" } },
+      discordWebhook: true
     }
   });
   if (!store) {

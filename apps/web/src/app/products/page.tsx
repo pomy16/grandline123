@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ExternalLink, RefreshCw, RotateCcw, Search, Send, XCircle } from "lucide-react";
+import { ArrowDownUp, ExternalLink, RefreshCw, RotateCcw, Search, Send, ShoppingCart, XCircle } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
 import { Badge } from "../../components/ui/badge";
@@ -32,7 +32,7 @@ type ProductRecord = {
   firstSeenAt: string;
   lastSeenAt: string;
   ignored: boolean;
-  store: { id: string; name: string };
+  store: { id: string; name: string; publicCartUrl?: string | null };
 };
 
 type StoreRecord = { id: string; name: string };
@@ -278,6 +278,12 @@ export default function ProductsPage() {
                               <Button type="button" variant="secondary" onClick={() => window.open(product.url, "_blank", "noopener,noreferrer")} aria-label="Open product">
                                 <ExternalLink size={16} aria-hidden />
                               </Button>
+                              {product.store.publicCartUrl ? (
+                                <Button type="button" variant="secondary" onClick={() => window.open(product.store.publicCartUrl!, "_blank", "noopener,noreferrer")}>
+                                  <ShoppingCart size={16} aria-hidden />
+                                  Cart
+                                </Button>
+                              ) : null}
                               <Button type="button" variant="secondary" onClick={() => productAction(`/api/products/${product.id}/test-alert`, "Test alert queued.")}>
                                 <Send size={16} aria-hidden />
                                 Test

@@ -35,7 +35,7 @@ const emptyWebhook = {
   active: true
 };
 
-const targets = ["DEFAULT", "POKEMON", "ONE_PIECE", "HIGH_PRIORITY", "ERROR_LOG"];
+const targets = ["DEFAULT", "POKEMON", "ONE_PIECE", "HIGH_PRIORITY", "ERROR_LOG", "TEST", "RESTOCK", "PRICE_DROP", "PREORDER"];
 
 function maskWebhookUrl(url: string) {
   try {
@@ -319,7 +319,7 @@ export default function SettingsPage() {
                   ))}
                 </div>
                 <div className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
-                  Routing order: high priority webhook, explicit keyword rule target, game webhook, then default webhook.
+                  Routing order: test webhook, error webhook, high priority, store webhook, event-type webhook, keyword rule target, game webhook, then default webhook.
                 </div>
               </CardContent>
             </Card>
