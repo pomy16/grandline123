@@ -1,6 +1,6 @@
 import type { MonitorMode, Store } from "@prisma/client";
 import type { StoreConfig } from "@tcg-monitor/shared";
-import { inferGame, normalizeUrl } from "@tcg-monitor/shared";
+import { inferGame, isRelevantTargetProduct, normalizeUrl } from "@tcg-monitor/shared";
 import { Prisma } from "@prisma/client";
 import { SafeHttpClient, MonitorRequestError } from "../http/safe-http-client";
 import { createMonitor } from "../monitors";
@@ -144,20 +144,26 @@ async function validateCandidate(storeConfig: StoreConfig, candidate: CandidateI
       mode: candidate.monitorMode,
       listingUrls: [candidate.url]
     });
-    const skippedWarnings = "warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.length : 0;
+    const relevantProducts = products.filter(isRelevantTargetProduct);
+    const skippedNonTargetProducts = products.length - relevantProducts.length;
+    const skippedWarnings = ("warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.length : 0) + skippedNonTargetProducts;
     return {
-      status: candidateStatusFromValidatedProducts(products.length),
-      productsFound: products.length,
+      status: candidateStatusFromValidatedProducts(relevantProducts.length),
+      productsFound: relevantProducts.length,
+      rawProductsFound: products.length,
+      skippedNonTargetProducts,
       skippedWarnings,
       reason:
-        products.length > 0
-          ? `Product source successfully extracted ${products.length} validated product(s).`
-          : `Page loaded, but no validated products were extracted${skippedWarnings > 0 ? `; skipped ${skippedWarnings} non-product candidate(s)` : ""}.`
+        relevantProducts.length > 0
+          ? `Product source successfully extracted ${relevantProducts.length} relevant sealed TCG product(s) from ${products.length} raw product candidate(s).`
+          : `Page loaded, but no relevant sealed TCG products were extracted${skippedWarnings > 0 ? `; skipped ${skippedWarnings} non-product or non-target candidate(s)` : ""}.`
     };
   } catch (error) {
     return {
       status: "NEEDS_ATTENTION",
       productsFound: 0,
+      rawProductsFound: 0,
+      skippedNonTargetProducts: 0,
       skippedWarnings: 0,
       reason: errorReason(error)
     };
@@ -190,7 +196,13 @@ export async function discoverStoreSources(storeId: string, scanJobId?: string) 
           productsFound: validation.productsFound,
           reason: validation.reason,
           discoveredFrom: candidate.discoveredFrom,
-          metadata: { ...(candidate.metadata ?? {}), validatedProductCount: validation.productsFound, skippedNonProductWarnings: validation.skippedWarnings } as Prisma.InputJsonValue,
+          metadata: {
+            ...(candidate.metadata ?? {}),
+            rawProductCandidateCount: validation.rawProductsFound,
+            validatedProductCount: validation.productsFound,
+            skippedNonProductWarnings: validation.skippedWarnings,
+            skippedNonTargetProducts: validation.skippedNonTargetProducts
+          } as Prisma.InputJsonValue,
           lastCheckedAt: new Date()
         },
         create: {
@@ -202,7 +214,13 @@ export async function discoverStoreSources(storeId: string, scanJobId?: string) 
           productsFound: validation.productsFound,
           reason: validation.reason,
           discoveredFrom: candidate.discoveredFrom,
-          metadata: { ...(candidate.metadata ?? {}), validatedProductCount: validation.productsFound, skippedNonProductWarnings: validation.skippedWarnings } as Prisma.InputJsonValue,
+          metadata: {
+            ...(candidate.metadata ?? {}),
+            rawProductCandidateCount: validation.rawProductsFound,
+            validatedProductCount: validation.productsFound,
+            skippedNonProductWarnings: validation.skippedWarnings,
+            skippedNonTargetProducts: validation.skippedNonTargetProducts
+          } as Prisma.InputJsonValue,
           lastCheckedAt: new Date()
         }
       });

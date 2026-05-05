@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AlertPriority, EventType, Game, Product, ProductEvent, WebhookTarget } from "@prisma/client";
+import type { AlertPriority, DiscordWebhook, EventType, Game, Product, ProductEvent, WebhookTarget } from "@prisma/client";
 import { workerConfig } from "../config";
 import { prisma } from "../prisma";
 import { buildDiscordPayload, sendWebhook } from "./discord";
@@ -50,13 +50,27 @@ export function routeCandidates(params: {
   ruleTarget?: WebhookTarget | null;
   isTest?: boolean;
   isError?: boolean;
+  multiRouteHighPriority?: boolean;
 }): WebhookRouteCandidate[] {
   const candidates: WebhookRouteCandidate[] = [];
 
-  if (params.isTest) addTarget(candidates, "TEST");
-  if (params.isError) addTarget(candidates, "ERROR_LOG");
-  if (params.priority === "HIGH" || params.priority === "CRITICAL") addTarget(candidates, "HIGH_PRIORITY");
-  if (params.storeWebhookId) candidates.push({ kind: "webhookId", webhookId: params.storeWebhookId });
+  if (params.isTest) {
+    addTarget(candidates, "TEST");
+    return candidates;
+  }
+  if (params.isError) {
+    addTarget(candidates, "ERROR_LOG");
+    return candidates;
+  }
+
+  const isHighPriority = params.priority === "HIGH" || params.priority === "CRITICAL";
+  if (params.storeWebhookId) {
+    candidates.push({ kind: "webhookId", webhookId: params.storeWebhookId });
+    if (isHighPriority && params.multiRouteHighPriority) addTarget(candidates, "HIGH_PRIORITY");
+    return candidates;
+  }
+
+  if (isHighPriority) addTarget(candidates, "HIGH_PRIORITY");
   addTarget(candidates, eventTypeTarget(params.eventType));
   if (params.ruleTarget && params.ruleTarget !== "DEFAULT") addTarget(candidates, params.ruleTarget);
   if (params.productGame === "POKEMON" || params.productGame === "BOTH") addTarget(candidates, "POKEMON");
@@ -66,25 +80,41 @@ export function routeCandidates(params: {
   return candidates;
 }
 
-async function resolveWebhook(params: Parameters<typeof routeCandidates>[0]) {
+function discordMultiRouteHighPriority() {
+  return process.env.DISCORD_MULTI_ROUTE_HIGH_PRIORITY === "true";
+}
+
+async function resolveCandidateWebhook(candidate: WebhookRouteCandidate) {
+  if (candidate.kind === "webhookId") {
+    return prisma.discordWebhook.findFirst({
+      where: { id: candidate.webhookId, active: true }
+    });
+  }
+  return prisma.discordWebhook.findFirst({
+    where: { target: candidate.target, active: true },
+    orderBy: { updatedAt: "desc" }
+  });
+}
+
+async function resolveWebhooks(params: Parameters<typeof routeCandidates>[0]) {
   const candidates = routeCandidates(params);
+  const webhooks: DiscordWebhook[] = [];
+  const seen = new Set<string>();
 
   for (const candidate of candidates) {
-    if (candidate.kind === "webhookId") {
-      const webhook = await prisma.discordWebhook.findFirst({
-        where: { id: candidate.webhookId, active: true }
-      });
-      if (webhook) return webhook;
-      continue;
-    }
-    const webhook = await prisma.discordWebhook.findFirst({
-      where: { target: candidate.target, active: true },
-      orderBy: { updatedAt: "desc" }
-    });
-    if (webhook) return webhook;
+    const webhook = await resolveCandidateWebhook(candidate);
+    if (!webhook) continue;
+    const key = `${webhook.id}:${webhook.url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    webhooks.push(webhook);
   }
 
-  return null;
+  if (params.storeWebhookId && webhooks.length === 0) {
+    return resolveWebhooks({ ...params, storeWebhookId: null });
+  }
+
+  return webhooks;
 }
 
 async function getGlobalCooldownSeconds() {
@@ -167,14 +197,15 @@ export async function notifyProductEvent(eventId: string) {
 
   const metadata = readMetadata(event);
   const cooldownSeconds = Number(metadata.matchedKeywordRuleCooldownSeconds ?? (await getGlobalCooldownSeconds()));
-  const webhook = await resolveWebhook({
+  const webhooks = await resolveWebhooks({
     eventType: event.type as EventType,
     productGame: event.product.game,
     priority: metadata.matchedKeywordRulePriority,
     storeWebhookId: event.product.store.discordWebhookId,
-    ruleTarget: metadata.matchedKeywordRuleWebhookTarget
+    ruleTarget: metadata.matchedKeywordRuleWebhookTarget,
+    multiRouteHighPriority: discordMultiRouteHighPriority()
   });
-  const target = webhook?.target ?? metadata.matchedKeywordRuleWebhookTarget ?? "DEFAULT";
+  const fallbackTarget = metadata.matchedKeywordRuleWebhookTarget ?? "DEFAULT";
 
   const oldValue = event.oldValue && typeof event.oldValue === "object" && !Array.isArray(event.oldValue) ? event.oldValue : {};
   const newValue = event.newValue && typeof event.newValue === "object" && !Array.isArray(event.newValue) ? event.newValue : {};
@@ -193,50 +224,59 @@ export async function notifyProductEvent(eventId: string) {
     priority: metadata.matchedKeywordRulePriority ?? "NORMAL"
   });
   const stateHash = stateHashForEvent(event);
-  const payloadHash = createHash("sha256")
-    .update(JSON.stringify({ stateHash, target, eventType: event.type, productId: event.productId }))
-    .digest("hex");
 
-  if (!webhook) {
+  if (webhooks.length === 0) {
+    const payloadHash = createHash("sha256")
+      .update(JSON.stringify({ stateHash, target: fallbackTarget, eventType: event.type, productId: event.productId }))
+      .digest("hex");
     await prisma.notificationLog.create({
       data: {
         productId: event.productId,
         eventId: event.id,
-        target,
+        target: fallbackTarget,
         status: "SKIPPED",
         payloadHash,
-        error: `No active Discord webhook configured for ${target} or fallback targets.`
+        error: `No active Discord webhook configured for ${fallbackTarget} or fallback targets.`
       }
     });
     return { status: "SKIPPED", reason: "No active webhook." };
   }
 
-  const skipReason = await shouldSkipNotification({ event, target: webhook.target, payloadHash, stateHash, cooldownSeconds });
-  if (skipReason) {
-    await prisma.notificationLog.create({
-      data: {
-        productId: event.productId,
-        eventId: event.id,
-        target: webhook.target,
-        status: "SKIPPED",
-        payloadHash,
-        error: skipReason
-      }
+  const deliveries = [];
+  for (const webhook of webhooks) {
+    const payloadHash = createHash("sha256")
+      .update(JSON.stringify({ stateHash, target: webhook.target, webhookId: webhook.id, eventType: event.type, productId: event.productId }))
+      .digest("hex");
+
+    const skipReason = await shouldSkipNotification({ event, target: webhook.target, payloadHash, stateHash, cooldownSeconds });
+    if (skipReason) {
+      await prisma.notificationLog.create({
+        data: {
+          productId: event.productId,
+          eventId: event.id,
+          target: webhook.target,
+          status: "SKIPPED",
+          payloadHash,
+          error: skipReason
+        }
+      });
+      deliveries.push({ status: "SKIPPED", reason: skipReason, target: webhook.target });
+      continue;
+    }
+
+    const delivery = await sendWebhook({
+      webhookUrl: webhook.url,
+      target: webhook.target,
+      webhookName: webhook.name,
+      eventId: event.id,
+      productId: event.productId,
+      payload,
+      payloadHash
     });
-    return { status: "SKIPPED", reason: skipReason };
+    deliveries.push(delivery);
   }
 
-  const delivery = await sendWebhook({
-    webhookUrl: webhook.url,
-    target: webhook.target,
-    webhookName: webhook.name,
-    eventId: event.id,
-    productId: event.productId,
-    payload,
-    payloadHash
-  });
-
-  if (delivery.ok) {
+  if (deliveries.some((delivery) => "ok" in delivery && delivery.ok)) {
     await prisma.product.update({
       where: { id: event.productId },
       data: { lastNotifiedHash: stateHash }
@@ -247,7 +287,7 @@ export async function notifyProductEvent(eventId: string) {
     });
   }
 
-  return delivery;
+  return deliveries.length === 1 ? deliveries[0] : { status: "MULTI_ROUTE", deliveries };
 }
 
 export async function sendProductTestAlert(productId: string, requestedTarget?: WebhookTarget) {
@@ -257,13 +297,13 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
   });
   const webhook = requestedTarget
     ? await prisma.discordWebhook.findFirst({ where: { target: requestedTarget, active: true }, orderBy: { updatedAt: "desc" } })
-    : await resolveWebhook({
+    : (await resolveWebhooks({
         eventType: "NEW_PRODUCT",
         productGame: product.game,
         priority: "NORMAL",
         storeWebhookId: product.store.discordWebhookId,
         isTest: true
-      });
+      }))[0] ?? null;
   const target = webhook?.target ?? requestedTarget ?? "TEST";
   const payload = buildDiscordPayload({
     eventType: "NEW_PRODUCT",

@@ -161,7 +161,7 @@ docker-compose.yml
 
 - Store-specific Discord webhook routing for personal store channels.
 - Additional webhook targets for `TEST`, `RESTOCK`, `PRICE_DROP`, and `PREORDER`.
-- Routing priority now checks test, error, high-priority, store-specific, event-type, rule-specific, game-specific, then default webhooks.
+- Routing is store-first for product events: test and error routes stay isolated, store-specific webhooks are primary, and high-priority copies are optional.
 - Stores UI supports selecting a store-specific Discord webhook.
 - Purchase-assist-only UI preparation keeps purchase actions manual and limited to opening public product or cart links.
 
@@ -199,6 +199,7 @@ docker-compose.yml
 - Category/listing/search/publisher pages remain valid source candidates, but are rejected as Product records.
 - Product-card titles prefer real image/title metadata over badges, stock labels, and load-more controls.
 - Seeded high-priority rules and built-in matching reject common accessory products such as albums, binders, card sleeves, deck boxes, deck protectors, folios, top loaders, and playmats.
+- Scanner persistence is filtered to relevant sealed TCG targets, so articles, external profiles, generic labels, accessories, toys, playmats, albums, sleeves, deck boxes, and similar non-target products do not create Product records, Events, or Discord alerts in future scans.
 - Existing product prices/images/game/category are preserved when a rendered card temporarily omits them, preventing noisy `Unknown` price updates.
 - `PRODUCT_UPDATED` Discord notifications are skipped by default so scans do not spam Discord with non-actionable title/image cleanup changes.
 - Store status is clearer: `Active`, `Needs attention`, `Empty`, `Auto-paused`, and `Paused`.
@@ -262,6 +263,7 @@ Important variables:
 | `DISCORD_SEND_DELAY_MS` | No | worker | Minimum delay between sends to the same Discord webhook route. Defaults to 500ms. |
 | `DISCORD_MAX_RETRIES` | No | worker | Maximum Discord delivery retries after rate limits. Defaults to 2. |
 | `DISCORD_RATE_LIMIT_BACKOFF_MS` | No | worker | Fallback Discord 429 backoff when no retry hint is provided. Defaults to 2500ms. |
+| `DISCORD_MULTI_ROUTE_HIGH_PRIORITY` | No | worker | When `false`, high-priority store events go only to the store-specific webhook. When `true`, they also send a copy to `HIGH_PRIORITY`. Defaults to `false`. |
 | `NOTIFY_PRODUCT_UPDATED` | No | worker | Set to `true` only if you want Discord alerts for non-stock/non-price product metadata changes. Defaults to `false`. |
 
 Use real Discord webhook URLs only when you are ready to test delivery.
@@ -395,12 +397,10 @@ When the worker creates a product event, it resolves a webhook in this order:
 
 1. `TEST` when sending product test notifications.
 2. `ERROR_LOG` for system error delivery paths.
-3. `HIGH_PRIORITY`, when a matched rule has `HIGH` or `CRITICAL` priority.
-4. The store-specific webhook selected on the Store, when active.
-5. Event-type targets: `RESTOCK`, `PRICE_DROP`, or `PREORDER`.
-6. The matched keyword rule's explicit webhook target, when it is not `DEFAULT`.
-7. `POKEMON` or `ONE_PIECE`, based on the product game.
-8. `DEFAULT`.
+3. The store-specific webhook selected on the Store, when active.
+4. If there is no active store webhook, fallback routes are checked: `HIGH_PRIORITY` for high/critical events, event-type targets, explicit keyword-rule target, game target, then `DEFAULT`.
+
+By default, `HIGH_PRIORITY` does not replace the store channel. With `DISCORD_MULTI_ROUTE_HIGH_PRIORITY=false`, a high-priority Knihy Dobrovský event goes only to `cz-knihy-dobrovsky` when that store webhook is active. With `DISCORD_MULTI_ROUTE_HIGH_PRIORITY=true`, the same event goes to the store webhook and also sends one extra copy to `HIGH_PRIORITY`.
 
 If no active webhook is found, the delivery is recorded as `SKIPPED`.
 
@@ -489,6 +489,8 @@ Purchase-assist link behavior:
 - Cart, basket, add-to-cart, checkout, order, and payment URLs are ignored as monitor source URLs and product URLs.
 - The app does not request `publicCartUrl` automatically. The user must click the UI or Discord link manually.
 - No automatic checkout, automatic purchasing, cart submission, order submission, or payment automation is implemented.
+- Relevant monitored targets are sealed TCG products such as boosters, booster boxes, booster bundles, displays, ETBs, blisters, tins, premium collections, starter decks, battle decks, and One Piece Card Game sealed products.
+- Accessories and non-target pages are skipped before persistence and alerting: albums, binders, folios, card sleeves, deck boxes, top loaders, playmats, figures, toys, posters, stickers, articles, guides, external profile pages such as Firmy.cz, and generic labels like `Bestseller`, `Na prodejně`, or `Nedostupné`.
 - Existing incorrectly extracted products are not deleted automatically. Ignore them manually from Products if they were created before this validation fix.
 
 Do not use 1-second polling or aggressive retry behavior. Keep normal real-store intervals in the 180-300 second range unless you have a specific safe source and a reason to change it. Reserve 60-second polling for future high-priority watchlist functionality, not as the default for all stores.
@@ -584,9 +586,9 @@ From Stores, use `Discover` to queue a source discovery job. The worker checks:
 - OpenGraph URL metadata
 - public category links containing Pokemon, Pokémon, TCG, One Piece, or card keywords
 
-Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated real products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, and publisher/listing pages can remain source candidates, but do not count as products and do not create events or Discord alerts.
+Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated relevant sealed TCG products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, publisher/listing pages, articles, external profiles, and accessories can remain source context or be skipped, but do not count as products and do not create events or Discord alerts.
 
-Product title cleanup removes category badges, stock chips, load-more controls, duplicated price text, and store UI labels such as `Bestseller`, `Na prodejně`, `Skladem online`, and `DMOC`. Accessory products can still be stored as Products when they are real product pages, but seeded sealed-product rules and built-in rule matching prevent Discord alerts for card sleeves, albums, binders, folios, deck boxes, deck protectors, top loaders, and playmats.
+Product title cleanup removes category badges, stock chips, load-more controls, duplicated price text, and store UI labels such as `Bestseller`, `Na prodejně`, `Skladem online`, and `DMOC`. The scanner then applies the sealed-product relevance filter before Product persistence, Event creation, and Discord delivery.
 
 Recommended discovery test flow:
 
@@ -594,8 +596,8 @@ Recommended discovery test flow:
 2. Promote only a candidate marked `Target found`.
 3. Run `Scan`.
 4. Check Products for real product detail URLs, prices/images/product IDs, and no category/control labels.
-5. Check that accessory products such as albums, folios, sleeves, and deck boxes do not match high-priority rules.
-6. Check Logs and notification delivery history for skipped non-products, skipped `PRODUCT_UPDATED` alerts, and Discord rate-limit retry details.
+5. Check that accessory products such as albums, folios, sleeves, deck boxes, playmats, figures, guide articles, and Firmy.cz profiles are listed in scan logs as skipped non-targets and do not create new Events.
+6. Check notification delivery history: store events should go to the store channel first, `PRODUCT_UPDATED` alerts are skipped unless enabled, and Discord rate-limit retry details are logged when applicable.
 
 ## Adding Keyword Rules
 

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { inferGame, isLikelyAccessoryProduct, keywordRuleMatchesProduct, normalizeTitle, normalizeUrl, parsePrice, productIdentityKey } from "./index";
+import {
+  inferGame,
+  isLikelyAccessoryProduct,
+  isLikelySealedTcgProductTitle,
+  isNonProductContentTitle,
+  keywordRuleMatchesProduct,
+  normalizeTitle,
+  normalizeUrl,
+  parsePrice,
+  productIdentityKey
+} from "./index";
 
 describe("shared normalization utilities", () => {
   it("normalizes accented and punctuated titles", () => {
@@ -98,6 +108,59 @@ describe("shared normalization utilities", () => {
 
   it("keeps sealed collections eligible for alert matching", () => {
     expect(isLikelyAccessoryProduct("Pokémon TCG Mega Venusaur ex Premium Collection")).toBe(false);
+  });
+
+  it("rejects real-world non-products and accessories before alert matching", () => {
+    for (const title of [
+      "Bestseller",
+      "Na prodejně",
+      "Nedostupné",
+      "Pokémon Hrací podložka - Frosted Forest",
+      "Pokémon: Kroužkové album na stránkové obaly 25 x 31,5 cm - Pikachu Mimikyu",
+      "Pokémon Bojová figurka - Horsea & Litwick",
+      "Pokémon Bojová figurka - Pikachu & Goomy",
+      "Jak začít sbírat Yu-Gi-Oh! karty v Česku",
+      "Tcgkarty.cz na Firmy.cz",
+      "UP Plastový toploader 35pt (25 ks) - Obaly na karty",
+      "Gamegenic: Casual Album 18-Pocket Black - Alba na karty"
+    ]) {
+      expect(isLikelySealedTcgProductTitle(title)).toBe(false);
+      expect(
+        keywordRuleMatchesProduct(
+          {
+            includeKeywords: ["pokemon", "pokémon", "booster", "collection", "tcg"],
+            excludeKeywords: [],
+            game: "BOTH"
+          },
+          {
+            title,
+            normalizedTitle: normalizeTitle(title),
+            price: 199,
+            game: inferGame(title)
+          }
+        )
+      ).toBe(false);
+    }
+  });
+
+  it("marks article/profile labels as non-product content", () => {
+    expect(isNonProductContentTitle("Jak začít sbírat Yu-Gi-Oh! karty v Česku")).toBe(true);
+    expect(isNonProductContentTitle("Tcgkarty.cz na Firmy.cz")).toBe(true);
+  });
+
+  it("allows target sealed TCG products through the relevance gate", () => {
+    for (const title of [
+      "Pokémon TCG: Poké Ball Tin 2025",
+      "Pokémon TCG: Surging Sparks - Booster",
+      "Pokémon TCG: ME02.5 Ascended Heroes - Mini Tin",
+      "Pokémon TCG: White Flare - Booster Bundle",
+      "Pokémon TCG: Elite Trainer Box",
+      "Pokémon TCG: Enhanced Booster Display",
+      "Pokémon TCG: 2-Pack Blister",
+      "Pokémon TCG: Cynthia’s Garchomp ex Premium Collection"
+    ]) {
+      expect(isLikelySealedTcgProductTitle(title)).toBe(true);
+    }
   });
 
   it("supports fuzzy keyword matching for compact product titles", () => {
