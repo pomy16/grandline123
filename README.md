@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-The current delivery includes **Phase 1 through Phase 6**: full-stack architecture, admin workflows, Discord notification routing, real public-source monitor adapters, polished dashboard UX, production hardening, CI, tests, improved seed data, and deployment documentation.
+The current delivery includes **Phase 1 through Phase 8**: full-stack architecture, admin workflows, Discord notification routing, real public-source monitor adapters, polished dashboard UX, production hardening, CI, tests, improved seed data, store-specific routing, Czech store presets, and deployment documentation.
 
 ## Safety and Compliance
 
@@ -155,6 +155,22 @@ docker-compose.yml
 - Expanded unit tests for shared utilities, keyword matching, parsing, normalization, duplicate detection, event generation, Discord payload formatting, monitor safety, API health routes, auth helpers, and web utility smoke coverage.
 - Idempotent seed data with Pokemon and One Piece demo scenarios, scan jobs, logs, notification logs, and placeholder webhook routes.
 - Production-oriented Dockerfiles and GitHub Actions CI.
+
+## Phase 7 Features
+
+- Store-specific Discord webhook routing for personal store channels.
+- Additional webhook targets for `TEST`, `RESTOCK`, `PRICE_DROP`, and `PREORDER`.
+- Routing priority now checks test, error, high-priority, store-specific, event-type, rule-specific, game-specific, then default webhooks.
+- Stores UI supports selecting a store-specific Discord webhook.
+- Purchase-assist-only UI preparation keeps purchase actions manual and limited to opening public product or cart links.
+
+## Phase 8 Features
+
+- Disabled-by-default Czech store presets for Alza, Dráčik, Smarty, Pompo, Cardstore, Luxor, Tolarie, and Knihy Dobrovský.
+- Store presets use public category/listing pages and conservative polling intervals.
+- Store-specific webhook assignment is resolved by webhook record name, not by hardcoded URL.
+- Seed notes document source URLs, recommended intervals, limitations, and missing webhook assignments.
+- Tests verify preset uniqueness, safe polling intervals, no Discord webhook URLs in presets, and name-based webhook assignment.
 
 ## Environment Variables
 
@@ -377,6 +393,36 @@ Real `API`, `HTML`, `SITEMAP`, `RSS`, and optional `PLAYWRIGHT` adapters are ava
 
 Store-specific Discord webhooks are useful for personal channels such as `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, and `cz-knihy-dobrovsky`. Create or activate the webhook in Settings, then select it on the Store form.
 
+## Czech Store Presets
+
+Run `npm run prisma:seed` to create or update the Czech presets. The presets use fixed internal IDs, so running the seed repeatedly updates the same rows instead of duplicating stores. Newly created real-store presets are paused by default; if you enable one and run the seed again, the seed keeps your active/paused choice.
+
+The seed links each preset to a store-specific Discord webhook only when a webhook record with the matching name already exists. It never stores real Discord webhook URLs in preset definitions. Add real webhook URLs in Settings, keep them masked in the UI, then assign or verify the store-specific webhook on the Stores page.
+
+| Store | Webhook name | Source URL(s) | Mode | Interval | Default |
+| --- | --- | --- | --- | --- | --- |
+| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `HTML` | 300s | paused |
+| Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `HTML` | 180s | paused |
+| Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `HTML` | 180s | paused |
+| Pompo | `cz-pompo` | `https://pompo.cz/pokemon/` | `HTML` | 300s | paused |
+| Cardstore | `cz-cardstore` | `https://www.cardstore.cz/pokemon-produkty/`, `https://www.cardstore.cz/one-piece-tcg/` | `HTML` | 180s | paused |
+| Luxor | `cz-luxor` | `https://www.luxor.cz/nakladatel/4415` | `HTML` | 180s | paused |
+| Tolarie | `cz-tolarie` | `https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/`, `https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/` | `HTML` | 180s | paused |
+| Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `HTML` | 300s | paused |
+
+Recommended one-by-one test flow:
+
+1. Open Settings and create or update webhook records named `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, and `cz-knihy-dobrovsky`.
+2. Paste real webhook URLs only in Settings, not in code, seed files, README, store notes, or logs.
+3. Open Stores and verify each preset has the expected store-specific webhook selected.
+4. Enable one store at a time.
+5. Run a manual scan.
+6. Review Logs, Products, and Events before enabling the next store.
+
+Some stores may return HTTP 403, block automated requests, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
+
+Do not use 1-second polling or aggressive retry behavior. Keep normal real-store intervals in the 180-300 second range unless you have a specific safe source and a reason to change it. Reserve 60-second polling for future high-priority watchlist functionality, not as the default for all stores.
+
 ## Configuring a Real Store Safely
 
 Use the least invasive monitor mode that works:
@@ -492,6 +538,7 @@ npm run test -w packages/shared
 Current tests cover:
 
 - shared normalization utilities
+- Czech store preset safety and routing metadata
 - keyword rule matching
 - price parsing
 - product parsing and normalization
@@ -594,6 +641,10 @@ Phase 3 implemented Discord webhook routing, event cooldowns, duplicate alert pr
 
 Phase 4 implemented API, HTML, sitemap, RSS, and optional Playwright monitor adapters.
 
-Phase 5 will complete dashboard tables, filters, logs, settings, and manual scan controls.
+Phase 5 completed dashboard tables, filters, logs, settings, and manual scan controls.
 
-Phase 6 will add broader tests, seed coverage, error handling, and production hardening.
+Phase 6 added broader tests, seed coverage, error handling, and production hardening.
+
+Phase 7 added store-specific Discord routing.
+
+Phase 8 added safe Czech store presets for personal monitoring.
