@@ -120,6 +120,16 @@ export function inferGame(title: string): Game {
   return "UNKNOWN";
 }
 
+export function isLikelyAccessoryProduct(title: string): boolean {
+  const normalized = normalizeTitle(title);
+  const accessoryPatterns = [
+    /\bultra pro\b.*\b(deck protector|deck box|pro binder|album|obaly|krabicka|krabicka|krouzkove album|flip box)\b/,
+    /\b(deck protector|deck box|pro binder|card sleeves|sleeves|obaly na karty|obaly|album na|krouzkove album|krabicka na karty|krabicka na karty|toploader|top loader|playmat|podlozka|folie|folia)\b/,
+    /\b(a4 album|a5 album|portfolio|binder album)\b/
+  ];
+  return accessoryPatterns.some((pattern) => pattern.test(normalized));
+}
+
 export function productIdentityKey(input: Pick<NormalizedProduct, "canonicalUrl" | "normalizedTitle" | "sku" | "ean">, storeId: string): string {
   return [storeId, input.ean || "", input.sku || "", input.canonicalUrl, input.normalizedTitle].join("|");
 }
@@ -147,6 +157,10 @@ function fuzzyIncludes(haystack: string, needle: string): boolean {
 }
 
 export function keywordRuleMatchesProduct(rule: KeywordRuleInput, product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "price" | "game">): boolean {
+  if (isLikelyAccessoryProduct(product.title)) {
+    return false;
+  }
+
   if (rule.game !== "BOTH" && product.game !== "BOTH" && product.game !== rule.game) {
     return false;
   }

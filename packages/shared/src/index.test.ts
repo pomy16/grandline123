@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferGame, keywordRuleMatchesProduct, normalizeTitle, normalizeUrl, parsePrice, productIdentityKey } from "./index";
+import { inferGame, isLikelyAccessoryProduct, keywordRuleMatchesProduct, normalizeTitle, normalizeUrl, parsePrice, productIdentityKey } from "./index";
 
 describe("shared normalization utilities", () => {
   it("normalizes accented and punctuated titles", () => {
@@ -73,6 +73,31 @@ describe("shared normalization utilities", () => {
         }
       )
     ).toBe(false);
+  });
+
+  it("rejects accessory products from sealed-product alert matching", () => {
+    const accessory = {
+      title: "Pokémon Ultra PRO: Deck Protector obaly na karty 65 ks - Snorlax Munchlax -",
+      normalizedTitle: "pokemon ultra pro deck protector obaly na karty 65 ks snorlax munchlax",
+      price: 269,
+      game: "POKEMON" as const
+    };
+
+    expect(isLikelyAccessoryProduct(accessory.title)).toBe(true);
+    expect(
+      keywordRuleMatchesProduct(
+        {
+          includeKeywords: ["pokemon", "booster", "elite trainer box"],
+          excludeKeywords: [],
+          game: "POKEMON"
+        },
+        accessory
+      )
+    ).toBe(false);
+  });
+
+  it("keeps sealed collections eligible for alert matching", () => {
+    expect(isLikelyAccessoryProduct("Pokémon TCG Mega Venusaur ex Premium Collection")).toBe(false);
   });
 
   it("supports fuzzy keyword matching for compact product titles", () => {

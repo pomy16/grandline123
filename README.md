@@ -197,6 +197,10 @@ docker-compose.yml
 - Rendered DOM extraction now supports product-card style category pages in addition to JSON-LD and configured selectors.
 - Product persistence now requires a real product URL and strong product evidence such as price, image, SKU/EAN, product ID, JSON-LD Product type, or a clear product card.
 - Category/listing/search/publisher pages remain valid source candidates, but are rejected as Product records.
+- Product-card titles prefer real image/title metadata over badges, stock labels, and load-more controls.
+- Seeded high-priority rules and built-in matching reject common accessory products such as albums, binders, card sleeves, deck boxes, deck protectors, folios, top loaders, and playmats.
+- Existing product prices/images/game/category are preserved when a rendered card temporarily omits them, preventing noisy `Unknown` price updates.
+- `PRODUCT_UPDATED` Discord notifications are skipped by default so scans do not spam Discord with non-actionable title/image cleanup changes.
 - Store status is clearer: `Active`, `Needs attention`, `Empty`, `Auto-paused`, and `Paused`.
 - Czech dynamic/error-prone presets now default to `PLAYWRIGHT` mode while staying paused until tested one by one.
 - Discovery and Playwright rendering still respect robots.txt and normal HTTP status handling; blocked sources fail safely instead of being bypassed.
@@ -258,6 +262,7 @@ Important variables:
 | `DISCORD_SEND_DELAY_MS` | No | worker | Minimum delay between sends to the same Discord webhook route. Defaults to 500ms. |
 | `DISCORD_MAX_RETRIES` | No | worker | Maximum Discord delivery retries after rate limits. Defaults to 2. |
 | `DISCORD_RATE_LIMIT_BACKOFF_MS` | No | worker | Fallback Discord 429 backoff when no retry hint is provided. Defaults to 2500ms. |
+| `NOTIFY_PRODUCT_UPDATED` | No | worker | Set to `true` only if you want Discord alerts for non-stock/non-price product metadata changes. Defaults to `false`. |
 
 Use real Discord webhook URLs only when you are ready to test delivery.
 
@@ -581,13 +586,16 @@ From Stores, use `Discover` to queue a source discovery job. The worker checks:
 
 Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated real products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, and publisher/listing pages can remain source candidates, but do not count as products and do not create events or Discord alerts.
 
+Product title cleanup removes category badges, stock chips, load-more controls, duplicated price text, and store UI labels such as `Bestseller`, `Na prodejně`, `Skladem online`, and `DMOC`. Accessory products can still be stored as Products when they are real product pages, but seeded sealed-product rules and built-in rule matching prevent Discord alerts for card sleeves, albums, binders, folios, deck boxes, deck protectors, top loaders, and playmats.
+
 Recommended discovery test flow:
 
 1. Run `Discover` for one paused store.
 2. Promote only a candidate marked `Target found`.
 3. Run `Scan`.
 4. Check Products for real product detail URLs, prices/images/product IDs, and no category/control labels.
-5. Check Logs and notification delivery history for skipped non-products and Discord rate-limit retry details.
+5. Check that accessory products such as albums, folios, sleeves, and deck boxes do not match high-priority rules.
+6. Check Logs and notification delivery history for skipped non-products, skipped `PRODUCT_UPDATED` alerts, and Discord rate-limit retry details.
 
 ## Adding Keyword Rules
 
