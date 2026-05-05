@@ -125,10 +125,33 @@ model Store {
   products                   Product[]
   scanJobs                   ScanJob[]
   scanLogs                   ScanLog[]
+  sourceCandidates           SourceCandidate[]
 
   @@index([active])
   @@index([mode])
   @@index([discordWebhookId])
+}
+
+model SourceCandidate {
+  id            String      @id @default(cuid())
+  storeId       String
+  store         Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  url           String
+  kind          String
+  monitorMode   MonitorMode @default(HTML)
+  status        String      @default("CANDIDATE")
+  productsFound Int         @default(0)
+  reason        String?
+  discoveredFrom String?
+  metadata      Json?
+  lastCheckedAt DateTime?
+  promotedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([storeId, url])
+  @@index([storeId, status])
+  @@index([monitorMode])
 }
 
 model Product {

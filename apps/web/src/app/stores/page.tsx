@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDownUp, CheckCircle2, Pause, Play, Plus, RefreshCw, Save, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, CheckCircle2, Pause, Play, Plus, RefreshCw, Save, Search, Trash2, XCircle } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
 import { Badge } from "../../components/ui/badge";
@@ -44,7 +44,8 @@ type StoreRecord = {
   repeatedFailureCount: number;
   autoPausedAfterFailures: boolean;
   averageScanDurationMs?: number | null;
-  _count?: { products: number; scanJobs?: number };
+  sourceCandidates?: SourceCandidate[];
+  _count?: { products: number; scanJobs?: number; sourceCandidates?: number };
 };
 
 type DiscordWebhook = {
@@ -67,9 +68,23 @@ type ScanJob = {
   store?: { name: string } | null;
 };
 
+type SourceCandidate = {
+  id: string;
+  url: string;
+  kind: string;
+  monitorMode: string;
+  status: string;
+  productsFound: number;
+  reason?: string | null;
+  discoveredFrom?: string | null;
+  lastCheckedAt?: string | null;
+  promotedAt?: string | null;
+};
+
 type StoreDetail = StoreRecord & {
   products: Array<{ id: string; title: string; stockStatus: string; lastSeenAt: string }>;
   scanJobs: ScanJob[];
+  sourceCandidates: SourceCandidate[];
 };
 
 const emptyForm = {
@@ -122,8 +137,18 @@ function validateUrl(value: string, label: string, required = true) {
 function storeStatus(store: StoreRecord) {
   if (store.lastError || store.repeatedFailureCount > 0) return { label: "Needs attention", tone: "danger" as const };
   if (store.autoPausedAfterFailures) return { label: "Auto-paused", tone: "warning" as const };
+  if (store.sourceCandidates?.some((candidate) => candidate.status === "ACTIVE")) return { label: "Active", tone: "success" as const };
+  if (store.sourceCandidates?.some((candidate) => candidate.status === "NEEDS_ATTENTION")) return { label: "Needs attention", tone: "warning" as const };
+  if (store.sourceCandidates && store.sourceCandidates.length > 0 && store.sourceCandidates.every((candidate) => candidate.status === "EMPTY")) return { label: "Empty", tone: "default" as const };
   if (store.active) return { label: "Active", tone: "success" as const };
   return { label: "Paused", tone: "default" as const };
+}
+
+function candidateTone(status: string) {
+  if (status === "ACTIVE") return "success" as const;
+  if (status === "NEEDS_ATTENTION") return "warning" as const;
+  if (status === "EMPTY") return "default" as const;
+  return "info" as const;
 }
 
 export default function StoresPage() {
@@ -135,6 +160,7 @@ export default function StoresPage() {
   const [meta, setMeta] = useState<PageMeta>(defaultMeta);
   const [selectedDetail, setSelectedDetail] = useState<StoreDetail | null>(null);
   const [scanResult, setScanResult] = useState<{ storeName: string; scanJob: ScanJob; queueJobId: string | number } | null>(null);
+  const [discoveryResult, setDiscoveryResult] = useState<{ storeName: string; scanJob: ScanJob; queueJobId: string | number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -301,6 +327,31 @@ export default function StoresPage() {
       await Promise.all([loadStores(), loadStoreDetail(store.id)]);
     } catch (scanError) {
       setError(scanError instanceof Error ? scanError.message : "Manual scan could not be queued.");
+    }
+  }
+
+  async function discoverStore(store: StoreRecord) {
+    setMessage(null);
+    setError(null);
+    try {
+      const payload = await apiFetch<{ data: { scanJob: ScanJob; queueJobId: string | number } }>(`/api/stores/${store.id}/discover`, { method: "POST" });
+      setDiscoveryResult({ storeName: store.name, ...payload.data });
+      setMessage(`Discovery scan queued for ${store.name}.`);
+      await Promise.all([loadStores(), loadStoreDetail(store.id)]);
+    } catch (discoveryError) {
+      setError(discoveryError instanceof Error ? discoveryError.message : "Discovery scan could not be queued.");
+    }
+  }
+
+  async function promoteCandidate(storeId: string, candidateId: string) {
+    setMessage(null);
+    setError(null);
+    try {
+      await apiFetch(`/api/stores/${storeId}/source-candidates/${candidateId}/promote`, { method: "POST" });
+      setMessage("Source candidate promoted to primary source.");
+      await Promise.all([loadStores(), loadStoreDetail(storeId)]);
+    } catch (promoteError) {
+      setError(promoteError instanceof Error ? promoteError.message : "Source candidate could not be promoted.");
     }
   }
 
@@ -496,6 +547,7 @@ export default function StoresPage() {
                                     {store.trusted ? <Badge tone="success">Trusted</Badge> : null}
                                   </div>
                                   {store.averageScanDurationMs ? <div className="mt-1 text-xs text-muted-foreground">Avg {formatDuration(store.averageScanDurationMs)}</div> : null}
+                                  {store._count?.sourceCandidates ? <div className="mt-1 text-xs text-muted-foreground">Candidates: {store._count.sourceCandidates}</div> : null}
                                 </td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.lastScanAt)}</td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.nextScanAt)}</td>
@@ -531,6 +583,10 @@ export default function StoresPage() {
                                     <Button type="button" variant="secondary" onClick={() => scanStore(store)}>
                                       <RefreshCw size={16} aria-hidden />
                                       Scan
+                                    </Button>
+                                    <Button type="button" variant="secondary" onClick={() => discoverStore(store)}>
+                                      <Search size={16} aria-hidden />
+                                      Discover
                                     </Button>
                                     <Button type="button" variant="ghost" onClick={() => action(`/api/stores/${store.id}/${store.active ? "pause" : "resume"}`, store.active ? "Store paused." : "Store resumed.")}>
                                       {store.active ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
@@ -589,6 +645,32 @@ export default function StoresPage() {
               </Card>
             ) : null}
 
+            {discoveryResult ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Discovery scan queued</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 text-sm md:grid-cols-4">
+                  <div>
+                    <div className="text-muted-foreground">Store</div>
+                    <div className="font-medium">{discoveryResult.storeName}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Status</div>
+                    <Badge tone="warning">{discoveryResult.scanJob.status}</Badge>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Discovery job</div>
+                    <div className="font-mono text-xs">{discoveryResult.scanJob.id}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Queue job</div>
+                    <div className="font-mono text-xs">{discoveryResult.queueJobId}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
             {selectedDetail ? (
               <Card>
                 <CardHeader>
@@ -626,6 +708,48 @@ export default function StoresPage() {
                       ))}
                     </div>
                   ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {selectedDetail ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <CardTitle>{selectedDetail.name} source candidates</CardTitle>
+                    <Button type="button" variant="secondary" onClick={() => discoverStore(selectedDetail)}>
+                      <Search size={16} aria-hidden />
+                      Discovery scan
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {selectedDetail.sourceCandidates.length === 0 ? <EmptyState title="No source candidates yet" detail="Run a discovery scan to inspect public metadata, sitemaps, feeds, and rendered category pages." /> : null}
+                  {selectedDetail.sourceCandidates.map((candidate) => (
+                    <div key={candidate.id} className="rounded-md border border-border bg-background p-3 text-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge tone={candidateTone(candidate.status)}>{candidate.status === "ACTIVE" ? "Target found" : candidate.status}</Badge>
+                            <Badge tone="info">{candidate.monitorMode}</Badge>
+                            <Badge tone="default">{candidate.kind}</Badge>
+                            {candidate.promotedAt ? <Badge tone="success">Primary</Badge> : null}
+                          </div>
+                          <div className="mt-2 break-all font-mono text-xs text-muted-foreground">{candidate.url}</div>
+                        </div>
+                        <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE"} onClick={() => promoteCandidate(selectedDetail.id, candidate.id)}>
+                          <CheckCircle2 size={16} aria-hidden />
+                          Promote
+                        </Button>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-3">
+                        <div>Products: {candidate.productsFound}</div>
+                        <div>Checked: {formatDateTime(candidate.lastCheckedAt)}</div>
+                        <div className="break-all">From: {candidate.discoveredFrom ? truncateMiddle(candidate.discoveredFrom, 80) : "-"}</div>
+                      </div>
+                      {candidate.reason ? <div className="mt-2 text-muted-foreground">{candidate.reason}</div> : null}
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             ) : null}

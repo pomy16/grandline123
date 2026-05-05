@@ -50,6 +50,10 @@ describe("Czech store presets", () => {
     });
   });
 
+  it("uses Playwright mode for Czech presets that benefit from rendered public category pages", () => {
+    expect(CZ_STORE_PRESETS.every((preset) => preset.mode === "PLAYWRIGHT")).toBe(true);
+  });
+
   it("does not contain Discord webhook URLs or secrets", () => {
     expect(JSON.stringify(CZ_STORE_PRESETS)).not.toMatch(/discord(?:app)?\.com\/api\/webhooks/i);
   });

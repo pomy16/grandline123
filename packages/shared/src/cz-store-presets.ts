@@ -1,4 +1,4 @@
-export type StorePresetMode = "API" | "SITEMAP" | "RSS" | "HTML";
+export type StorePresetMode = "API" | "SITEMAP" | "RSS" | "HTML" | "PLAYWRIGHT";
 
 export interface CzStorePreset {
   id: string;
@@ -28,7 +28,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-alza",
     baseUrl: "https://www.alza.cz",
     listingUrls: ["https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 300,
     currency: "CZK",
     country: "CZ",
@@ -36,9 +36,9 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     active: false,
     trusted: true,
     recommended: false,
-    testedStatus: "403 / paused",
+    testedStatus: "needs attention / paused",
     sourceSummary: "Public Alza Pokemon cards listing sorted by price.",
-    limitation: "Re-checked public Alza Pokemon listing candidates; observed HTTP 403 remains the safe outcome, so keep paused and rely on existing failure/backoff handling."
+    limitation: "Use browser rendering for diagnostics, but if the site returns HTTP 403 it must remain Needs Attention with zero products/events/alerts."
   },
   {
     id: "preset-cz-dracik",
@@ -47,7 +47,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-dracik",
     baseUrl: "https://www.dracik.cz",
     listingUrls: ["https://www.dracik.cz/pokemon-karticky/"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -66,7 +66,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-smarty",
     baseUrl: "https://www.smarty.cz",
     listingUrls: ["https://www.smarty.cz/pokemon-tcg-4c14578", "https://www.smarty.cz/one-piece-tcg-4c14584"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -74,9 +74,9 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     active: false,
     trusted: true,
     recommended: false,
-    testedStatus: "403 / paused",
+    testedStatus: "needs attention / paused",
     sourceSummary: "Public Smarty Pokemon TCG and One Piece TCG category pages.",
-    limitation: "Re-checked public Smarty TCG category candidates; observed HTTP 403 remains the safe outcome, so keep paused unless a safe public source works."
+    limitation: "Use browser rendering for diagnostics, but if the site returns HTTP 403 it must remain Needs Attention with zero products/events/alerts."
   },
   {
     id: "preset-cz-pompo",
@@ -85,7 +85,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-pompo",
     baseUrl: "https://pompo.cz",
     listingUrls: ["https://pompo.cz/pokemon-tcg/"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 300,
     currency: "CZK",
     country: "CZ",
@@ -104,7 +104,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-cardstore",
     baseUrl: "https://www.cardstore.cz",
     listingUrls: ["https://www.cardstore.cz/pokemon-produkty/", "https://www.cardstore.cz/one-piece-tcg/"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -123,7 +123,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-luxor",
     baseUrl: "https://www.luxor.cz",
     listingUrls: ["https://www.luxor.cz/clanek/727/pokemon-day"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -142,7 +142,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-tolarie",
     baseUrl: "https://www.tolarie.cz",
     listingUrls: ["https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/", "https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -161,7 +161,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-knihy-dobrovsky",
     baseUrl: "https://www.knihydobrovsky.cz",
     listingUrls: ["https://www.knihydobrovsky.cz/pokemon-tcg"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 300,
     currency: "CZK",
     country: "CZ",
@@ -180,7 +180,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-vesely-drak",
     baseUrl: "https://www.vesely-drak.cz",
     listingUrls: ["https://www.vesely-drak.cz/produkty/boostery/", "https://www.vesely-drak.cz/produkty/one-piece-card-game/"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -189,7 +189,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     trusted: true,
     recommended: false,
     testedStatus: "candidate / paused",
-    sourceSummary: "Public Veselý Drak Pokemon booster and One Piece Card Game category pages.",
+    sourceSummary: "Public Veselý Drak Pokemon booster and One Piece Card Game category pages, rendered with Playwright for dynamic DOM readiness.",
     limitation: "Public category pages look suitable from search/manual HEAD checks, but keep paused until local scan quality is confirmed."
   },
   {
@@ -199,7 +199,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-tcgkarty",
     baseUrl: "https://www.tcgkarty.cz",
     listingUrls: ["https://www.tcgkarty.cz/tcg-pokemon", "https://www.tcgkarty.cz/tcg-one-piece"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -218,7 +218,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-gengar",
     baseUrl: "https://www.gengar.cz",
     listingUrls: ["https://www.gengar.cz/pokemon", "https://www.gengar.cz/one-piece"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 180,
     currency: "CZK",
     country: "CZ",
@@ -227,7 +227,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     trusted: true,
     recommended: false,
     testedStatus: "candidate / paused",
-    sourceSummary: "Public Gengar.cz Pokemon and One Piece category pages.",
+    sourceSummary: "Public Gengar.cz Pokemon and One Piece category pages, rendered with Playwright for dynamic DOM readiness.",
     limitation: "Upgates category pages can include broad products and purchase buttons; keep paused until manual scan output is reviewed."
   },
   {
@@ -237,7 +237,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-hranane-tu",
     baseUrl: "https://www.hrananetu.cz",
     listingUrls: ["https://www.hrananetu.cz/kategorie-pokemon"],
-    mode: "HTML",
+    mode: "PLAYWRIGHT",
     pollingIntervalSeconds: 300,
     currency: "CZK",
     country: "CZ",

@@ -345,7 +345,7 @@ async function seedCzechStorePresets() {
       notes
     };
 
-    await prisma.store.upsert({
+    const store = await prisma.store.upsert({
       where: { id: preset.id },
       update: data,
       create: {
@@ -354,6 +354,30 @@ async function seedCzechStorePresets() {
         active: false
       }
     });
+
+    for (const listingUrl of preset.listingUrls) {
+      await prisma.sourceCandidate.upsert({
+        where: { storeId_url: { storeId: store.id, url: listingUrl } },
+        update: {
+          kind: "PRESET_LISTING",
+          monitorMode: preset.mode,
+          status: preset.recommended ? "ACTIVE" : "CANDIDATE",
+          reason: preset.recommended ? "Preset source is currently marked working/recommended." : "Seeded preset source; run Discovery scan to validate locally.",
+          discoveredFrom: "prisma.seed",
+          productsFound: 0
+        },
+        create: {
+          storeId: store.id,
+          url: listingUrl,
+          kind: "PRESET_LISTING",
+          monitorMode: preset.mode,
+          status: preset.recommended ? "ACTIVE" : "CANDIDATE",
+          reason: preset.recommended ? "Preset source is currently marked working/recommended." : "Seeded preset source; run Discovery scan to validate locally.",
+          discoveredFrom: "prisma.seed",
+          productsFound: 0
+        }
+      });
+    }
   }
 }
 
