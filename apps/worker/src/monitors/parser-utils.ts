@@ -51,33 +51,111 @@ export function asArray(value: unknown): unknown[] {
   return [];
 }
 
-export function productFromUnknown(item: unknown, storeConfig: StoreConfig, source: string): NormalizedProduct | null {
+function normalizePathForSafety(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+export function isPurchaseAssistUrl(url: string, baseUrl?: string): boolean {
+  try {
+    const parsed = new URL(url, baseUrl);
+    const safePath = normalizePathForSafety(`${parsed.pathname}?${parsed.searchParams.toString()}`);
+    const segments = safePath.split(/[/?#&=_-]+/).filter(Boolean);
+    if (segments.some((segment) => ["basket", "cart", "checkout", "order", "payment", "objednavka", "kosik", "platba", "add"].includes(segment))) return true;
+    return /addtocart|add-to-cart|add_to_cart|nakupni-kosik|pridat-do-kosiku|vlozit-do-kosiku|pokladna/.test(safePath);
+  } catch {
+    return false;
+  }
+}
+
+function isSameUrl(first: string, second: string) {
+  try {
+    return normalizeUrl(first) === normalizeUrl(second);
+  } catch {
+    return false;
+  }
+}
+
+export function isGenericProductUrl(url: string, storeConfig: StoreConfig): boolean {
+  try {
+    const canonical = normalizeUrl(url, storeConfig.baseUrl);
+    const parsed = new URL(canonical);
+    const base = new URL(storeConfig.baseUrl);
+    if (parsed.origin === base.origin && (parsed.pathname === "/" || parsed.pathname === "")) return true;
+    return storeConfig.listingUrls.some((listingUrl) => isSameUrl(canonical, normalizeUrl(listingUrl, storeConfig.baseUrl)));
+  } catch {
+    return true;
+  }
+}
+
+export function isValidProductUrl(url: string | null, storeConfig: StoreConfig): url is string {
+  if (!url) return false;
+  if (isPurchaseAssistUrl(url, storeConfig.baseUrl)) return false;
+  return !isGenericProductUrl(url, storeConfig);
+}
+
+function meaningfulProductTitle(title: string | null, storeConfig: StoreConfig) {
+  if (!title) return false;
+  const normalized = normalizeTitle(title);
+  if (normalized.length < 3) return false;
+  if (normalized === normalizeTitle(storeConfig.name)) return false;
+  return !["home", "homepage", "uvodni stranka", "eshop", "katalog"].includes(normalized);
+}
+
+function firstValidProductUrl(storeConfig: StoreConfig, ...values: unknown[]) {
+  for (const value of values) {
+    const candidate = pickString(value);
+    if (isValidProductUrl(candidate, storeConfig)) return normalizeUrl(candidate, storeConfig.baseUrl);
+  }
+  return null;
+}
+
+function firstPublicCartUrl(storeConfig: StoreConfig, ...values: unknown[]) {
+  for (const value of values) {
+    const candidate = pickString(value);
+    if (candidate && isPurchaseAssistUrl(candidate, storeConfig.baseUrl)) return normalizeUrl(candidate, storeConfig.baseUrl);
+  }
+  return null;
+}
+
+export function productFromUnknown(item: unknown, storeConfig: StoreConfig, source: string, onReject?: (reason: string) => void): NormalizedProduct | null {
   if (!item || typeof item !== "object") return null;
   const record = item as Record<string, unknown>;
   const offers = record.offers && typeof record.offers === "object" ? (Array.isArray(record.offers) ? record.offers[0] : record.offers) : null;
   const offer = offers && typeof offers === "object" ? (offers as Record<string, unknown>) : {};
   const imageCandidate = Array.isArray(record.image) ? record.image[0] : record.image;
   const title = pickString(record.title, record.name, record.productName, record.headline);
-  const url = pickString(record.url, record.productUrl, record.link, record["@id"], offer.url);
-  if (!title || !url) return null;
+  const canonicalUrl = firstValidProductUrl(storeConfig, record.productUrl, record.url, record.link, record["@id"], offer.url);
+  if (!meaningfulProductTitle(title, storeConfig)) {
+    if (title) onReject?.(`Skipped generic or non-product title "${title}".`);
+    return null;
+  }
+  if (!canonicalUrl) {
+    const rejectedUrl = pickString(record.productUrl, record.url, record.link, record["@id"], offer.url);
+    if (rejectedUrl) onReject?.(`Skipped non-product URL ${rejectedUrl}.`);
+    return null;
+  }
   const stock = normalizeStockStatus(pickString(record.stockStatus, record.availability, record.available, record.inStock, offer.availability) ?? record.isAvailable);
   const priceValue = record.price ?? record.salePrice ?? record.currentPrice ?? offer.price;
   const price = typeof priceValue === "number" ? priceValue : priceValue ? parsePrice(String(priceValue)) : null;
-  const canonicalUrl = normalizeUrl(url, storeConfig.baseUrl);
+  const publicCartUrl = firstPublicCartUrl(storeConfig, record.publicCartUrl, record.addToCartUrl, record.add_to_cart_url, record.cartUrl, record.buyUrl, record.addUrl, offer.url);
 
   return {
-    title,
-    normalizedTitle: normalizeTitle(title),
+    title: title!,
+    normalizedTitle: normalizeTitle(title!),
     url: canonicalUrl,
     canonicalUrl,
     imageUrl: pickString(record.imageUrl, imageCandidate, record.thumbnail, record.thumbnailUrl),
+    publicCartUrl,
     price,
     currency: pickString(record.currency, record.priceCurrency, offer.priceCurrency) ?? storeConfig.currency,
     ...stock,
     sku: pickString(record.sku, record.mpn, record.productCode),
     ean: pickString(record.ean, record.gtin, record.gtin13, record.barcode),
     category: pickString(record.category, record.productType, record.collection),
-    game: inferGame(title),
+    game: inferGame(title!),
     rawData: { source, item }
   };
 }

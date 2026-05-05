@@ -84,6 +84,7 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
       normalizedTitle: incoming.normalizedTitle,
       url: incoming.url,
       imageUrl: incoming.imageUrl,
+      publicCartUrl: incoming.publicCartUrl ?? null,
       previousPrice: existing?.price ?? null,
       price: incoming.price,
       currency: incoming.currency,
@@ -104,6 +105,7 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
       url: incoming.url,
       canonicalUrl: incoming.canonicalUrl,
       imageUrl: incoming.imageUrl,
+      publicCartUrl: incoming.publicCartUrl ?? null,
       price: incoming.price,
       currency: incoming.currency,
       stockStatus: incoming.stockStatus,
@@ -245,6 +247,7 @@ export async function scanStore(storeId: string, scanJobId?: string) {
     const monitor = createMonitor(store.mode);
     const products = await applyKeywordRules(await monitor.scan(toStoreConfig(store)));
     assertNoMockProductsForRealStore(store, products);
+    const parserWarnings = "warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.slice(0, 20) : [];
     let eventsCreated = 0;
 
     await prisma.scanLog.create({
@@ -261,6 +264,7 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           products: products.slice(0, 10).map((product) => ({
             title: product.title,
             url: product.canonicalUrl,
+            publicCartUrl: product.publicCartUrl ?? null,
             price: product.price ?? null,
             stockStatus: product.stockStatus,
             source:
@@ -271,6 +275,17 @@ export async function scanStore(storeId: string, scanJobId?: string) {
         } as Prisma.InputJsonValue
       }
     });
+
+    if (parserWarnings.length > 0) {
+      await prisma.scanLog.create({
+        data: {
+          storeId: store.id,
+          severity: "WARN",
+          message: `${store.mode} parser skipped non-product URLs for ${store.name}.`,
+          context: { mode: store.mode, monitorMode: store.mode, parserWarnings } as Prisma.InputJsonValue
+        }
+      });
+    }
 
     for (const product of products) {
       const result = await persistProduct(store, product);

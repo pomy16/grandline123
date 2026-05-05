@@ -173,6 +173,7 @@ export async function notifyProductEvent(eventId: string) {
     stockStatus: event.product.stockStatus,
     imageUrl: event.product.imageUrl,
     productUrl: event.product.url,
+    publicCartUrl: event.product.publicCartUrl,
     category: event.product.category,
     game: event.product.game,
     priority: metadata.matchedKeywordRulePriority ?? "NORMAL"
@@ -257,6 +258,7 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
     stockStatus: product.stockStatus,
     imageUrl: product.imageUrl,
     productUrl: product.url,
+    publicCartUrl: product.publicCartUrl,
     category: product.category,
     game: product.game,
     priority: "NORMAL"

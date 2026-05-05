@@ -17,6 +17,7 @@ This project is designed as a monitoring and purchase-assist tool, not an automa
 - Store polling should use official APIs, public JSON endpoints, RSS feeds, sitemap.xml, or structured data where possible.
 - HTML parsing is only for publicly accessible product or listing pages.
 - The application supports only manual purchase assist actions such as opening a product URL or a public cart URL.
+- Cart, basket, add-to-cart, checkout, order, and payment URLs are never monitored or requested automatically.
 
 ## Tech Stack
 
@@ -399,16 +400,16 @@ Run `npm run prisma:seed` to create or update the Czech presets. The presets use
 
 The seed links each preset to a store-specific Discord webhook only when a webhook record with the matching name already exists. It never stores real Discord webhook URLs in preset definitions. Add real webhook URLs in Settings, keep them masked in the UI, then assign or verify the store-specific webhook on the Stores page.
 
-| Store | Webhook name | Source URL(s) | Mode | Interval | Default |
-| --- | --- | --- | --- | --- | --- |
-| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `HTML` | 300s | paused |
-| Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `HTML` | 180s | paused |
-| Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `HTML` | 180s | paused |
-| Pompo | `cz-pompo` | `https://pompo.cz/pokemon/` | `HTML` | 300s | paused |
-| Cardstore | `cz-cardstore` | `https://www.cardstore.cz/pokemon-produkty/`, `https://www.cardstore.cz/one-piece-tcg/` | `HTML` | 180s | paused |
-| Luxor | `cz-luxor` | `https://www.luxor.cz/nakladatel/4415` | `HTML` | 180s | paused |
-| Tolarie | `cz-tolarie` | `https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/`, `https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/` | `HTML` | 180s | paused |
-| Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `HTML` | 300s | paused |
+| Store | Webhook name | Source URL(s) | Mode | Interval | Tested status | Default |
+| --- | --- | --- | --- | --- | --- | --- |
+| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `HTML` | 300s | 403 / paused | paused |
+| Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `HTML` | 180s | cart URL issue / paused | paused |
+| Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `HTML` | 180s | 403 / paused | paused |
+| Pompo | `cz-pompo` | `https://pompo.cz/pokemon/` | `HTML` | 300s | 404 / paused | paused |
+| Cardstore | `cz-cardstore` | `https://www.cardstore.cz/pokemon-produkty/`, `https://www.cardstore.cz/one-piece-tcg/` | `HTML` | 180s | fetch failed / paused | paused |
+| Luxor | `cz-luxor` | `https://www.luxor.cz/nakladatel/4415` | `HTML` | 180s | 0 products / paused | paused |
+| Tolarie | `cz-tolarie` | `https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/`, `https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/` | `HTML` | 180s | generic page skipped / paused | paused |
+| Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `HTML` | 300s | working | paused |
 
 Recommended one-by-one test flow:
 
@@ -419,7 +420,17 @@ Recommended one-by-one test flow:
 5. Run a manual scan.
 6. Review Logs, Products, and Events before enabling the next store.
 
-Some stores may return HTTP 403, block automated requests, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
+Knihy Dobrovský is currently the only preset marked as working/recommended. Other stores should stay paused until a safe public source is confirmed.
+
+Some stores may return HTTP 403, block automated requests, expose robots.txt restrictions, return 404, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
+
+Purchase-assist link behavior:
+
+- Product URLs are real product detail URLs used for monitoring and opening product pages.
+- `publicCartUrl` is only an optional manual shortcut extracted from public page markup when a valid product page/listing also exposes it.
+- Cart, basket, add-to-cart, checkout, order, and payment URLs are ignored as monitor source URLs and product URLs.
+- The app does not request `publicCartUrl` automatically. The user must click the UI or Discord link manually.
+- No automatic checkout, automatic purchasing, cart submission, order submission, or payment automation is implemented.
 
 Do not use 1-second polling or aggressive retry behavior. Keep normal real-store intervals in the 180-300 second range unless you have a specific safe source and a reason to change it. Reserve 60-second polling for future high-priority watchlist functionality, not as the default for all stores.
 
@@ -542,6 +553,8 @@ Current tests cover:
 - keyword rule matching
 - price parsing
 - product parsing and normalization
+- parser rejection of cart/add/checkout URLs as product URLs
+- manual `publicCartUrl` purchase-assist metadata
 - duplicate product detection
 - event generation and state hashing
 - Discord payload formatting

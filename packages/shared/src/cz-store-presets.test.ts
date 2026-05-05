@@ -22,6 +22,12 @@ describe("Czech store presets", () => {
     expect(CZ_STORE_PRESETS.every((preset) => preset.pollingIntervalSeconds >= 60 && preset.pollingIntervalSeconds !== 3600)).toBe(true);
   });
 
+  it("marks only Knihy Dobrovský as currently working and recommended", () => {
+    const recommended = CZ_STORE_PRESETS.filter((preset) => preset.recommended);
+    expect(recommended.map((preset) => preset.slug)).toEqual(["cz-knihy-dobrovsky"]);
+    expect(recommended[0].testedStatus).toBe("working");
+  });
+
   it("uses the requested polling intervals", () => {
     expect(Object.fromEntries(CZ_STORE_PRESETS.map((preset) => [preset.slug, preset.pollingIntervalSeconds]))).toEqual({
       "cz-alza": 300,

@@ -23,10 +23,16 @@ export interface DiscordAlertInput {
   stockStatus?: string | null;
   imageUrl?: string | null;
   productUrl: string;
+  publicCartUrl?: string | null;
   category?: string | null;
 }
 
 export function buildDiscordPayload(input: Omit<DiscordAlertInput, "webhookUrl" | "target">) {
+  const quickActions = [
+    `[Open product](${input.productUrl})`,
+    ...(input.publicCartUrl ? [`[Add to cart](${input.publicCartUrl})`] : [])
+  ].join(" | ");
+
   return {
     embeds: [
       {
@@ -42,7 +48,7 @@ export function buildDiscordPayload(input: Omit<DiscordAlertInput, "webhookUrl" 
           ...(input.oldPrice ? [{ name: "Old price", value: input.oldPrice, inline: true }] : []),
           { name: "Stock", value: input.stockStatus ?? "Unknown", inline: true },
           { name: "Category", value: input.category ?? "Uncategorized", inline: true },
-          { name: "Quick actions", value: `[Open product](${input.productUrl})`, inline: false }
+          { name: "Quick actions", value: quickActions, inline: false }
         ],
         footer: {
           text: "TCG Monitor - purchase assist only"

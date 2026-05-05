@@ -19,6 +19,7 @@ type ProductRecord = {
   title: string;
   url: string;
   imageUrl?: string | null;
+  publicCartUrl?: string | null;
   price?: string | null;
   previousPrice?: string | null;
   currency: string;
@@ -278,10 +279,10 @@ export default function ProductsPage() {
                               <Button type="button" variant="secondary" onClick={() => window.open(product.url, "_blank", "noopener,noreferrer")} aria-label="Open product">
                                 <ExternalLink size={16} aria-hidden />
                               </Button>
-                              {product.store.publicCartUrl ? (
-                                <Button type="button" variant="secondary" onClick={() => window.open(product.store.publicCartUrl!, "_blank", "noopener,noreferrer")}>
+                              {product.publicCartUrl ? (
+                                <Button type="button" variant="secondary" onClick={() => window.open(product.publicCartUrl!, "_blank", "noopener,noreferrer")}>
                                   <ShoppingCart size={16} aria-hidden />
-                                  Cart
+                                  Open cart
                                 </Button>
                               ) : null}
                               <Button type="button" variant="secondary" onClick={() => productAction(`/api/products/${product.id}/test-alert`, "Test alert queued.")}>

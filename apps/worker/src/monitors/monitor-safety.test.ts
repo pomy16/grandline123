@@ -71,4 +71,20 @@ describe("real monitor safety", () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
+
+  it("stops safely when robots.txt disallows the listing URL", async () => {
+    vi.unstubAllEnvs();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/plain" }),
+      text: async () => "User-agent: *\nDisallow: /products"
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new HtmlMonitor().scan(baseStore)).rejects.toThrow("robots.txt disallows monitoring");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
 });

@@ -8,13 +8,15 @@ import {
   selectorImage,
   selectorText,
   normalizeStockStatus,
-  uniqueProducts
+  uniqueProducts,
+  isPurchaseAssistUrl,
+  isValidProductUrl
 } from "./parser-utils";
 
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
   const title = selectorText(html, storeConfig.selectors?.title) ?? selectorText(html, "h1");
   const href = selectorHref(html, storeConfig.selectors?.productUrl);
-  if (!title || !href) return null;
+  if (!title || normalizeTitle(title) === normalizeTitle(storeConfig.name) || !isValidProductUrl(href, storeConfig)) return null;
   const priceText = selectorText(html, storeConfig.selectors?.price);
   const stockText = [selectorText(html, storeConfig.selectors?.stockStatus), selectorText(html, storeConfig.selectors?.preorderStatus)].filter(Boolean).join(" ");
   const stock = normalizeStockStatus(stockText);
@@ -26,6 +28,7 @@ export function productFromSelectors(html: string, storeConfig: StoreConfig, pag
     url: canonicalUrl,
     canonicalUrl,
     imageUrl: selectorImage(html, storeConfig.selectors?.image),
+    publicCartUrl: publicCartLink(html, storeConfig),
     price: priceText ? parsePrice(priceText) : null,
     currency: storeConfig.currency,
     ...stock,
@@ -35,6 +38,16 @@ export function productFromSelectors(html: string, storeConfig: StoreConfig, pag
     game: inferGame(title),
     rawData: { source: "html-monitor", pageUrl, parser: "selectors" }
   };
+}
+
+export function publicCartLink(html: string, storeConfig: StoreConfig) {
+  const anchorRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = anchorRegex.exec(html))) {
+    const href = match[1];
+    if (isPurchaseAssistUrl(href, storeConfig.baseUrl)) return normalizeUrl(href, storeConfig.baseUrl);
+  }
+  return null;
 }
 
 export function productLinks(html: string, storeConfig: StoreConfig) {
@@ -47,13 +60,22 @@ export function productLinks(html: string, storeConfig: StoreConfig) {
     const href = match[1];
     if (selector?.startsWith(".") && !new RegExp(`class=["'][^"']*\\b${selector.slice(1)}\\b`, "i").test(tag)) continue;
     if (selector?.startsWith("#") && !new RegExp(`id=["']${selector.slice(1)}["']`, "i").test(tag)) continue;
-    if (/product|products|shop|card|tcg|pokemon|one-piece/i.test(href)) links.add(normalizeUrl(href, storeConfig.baseUrl));
+    if (/product|products|shop|card|tcg|pokemon|one-piece/i.test(href) && isValidProductUrl(href, storeConfig)) {
+      links.add(normalizeUrl(href, storeConfig.baseUrl));
+    }
   }
   return [...links].slice(0, Number(process.env.HTML_MONITOR_MAX_PRODUCT_PAGES ?? 25));
 }
 
 export class HtmlMonitor implements StoreMonitor {
+  warnings: string[] = [];
+
+  private warn(message: string) {
+    if (!this.warnings.includes(message)) this.warnings.push(message);
+  }
+
   async scan(storeConfig: StoreConfig): Promise<NormalizedProduct[]> {
+    this.warnings = [];
     const client = new SafeHttpClient(storeConfig);
     const products: NormalizedProduct[] = [];
 
@@ -61,7 +83,7 @@ export class HtmlMonitor implements StoreMonitor {
       const listing = await client.fetchText(listingUrl, "HTML");
 
       for (const item of extractJsonLd(listing.body)) {
-        const product = productFromUnknown(item, storeConfig, "html-monitor-jsonld");
+        const product = productFromUnknown(item, storeConfig, "html-monitor-jsonld", (reason) => this.warn(reason));
         if (product) products.push(product);
       }
 
@@ -74,7 +96,7 @@ export class HtmlMonitor implements StoreMonitor {
       for (const link of links) {
         const page = await client.fetchText(link, "HTML");
         for (const item of extractJsonLd(page.body)) {
-          const product = productFromUnknown(item, storeConfig, "html-monitor-product-jsonld");
+          const product = productFromUnknown(item, storeConfig, "html-monitor-product-jsonld", (reason) => this.warn(reason));
           if (product) products.push(product);
         }
         const selected = productFromSelectors(page.body, storeConfig, page.url);

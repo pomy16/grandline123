@@ -21,10 +21,16 @@ export function buildDiscordPayload(input: {
   stockStatus?: string | null;
   imageUrl?: string | null;
   productUrl: string;
+  publicCartUrl?: string | null;
   category?: string | null;
   game?: Game | null;
   priority?: AlertPriority | null;
 }) {
+  const quickActions = [
+    `[Open product](${input.productUrl})`,
+    ...(input.publicCartUrl ? [`[Add to cart](${input.publicCartUrl})`] : [])
+  ].join(" | ");
+
   return {
     embeds: [
       {
@@ -42,7 +48,7 @@ export function buildDiscordPayload(input: {
           { name: "Category", value: input.category ?? "Uncategorized", inline: true },
           { name: "Game", value: input.game ?? "UNKNOWN", inline: true },
           { name: "Priority", value: input.priority ?? "NORMAL", inline: true },
-          { name: "Quick actions", value: `[Open product](${input.productUrl})`, inline: false }
+          { name: "Quick actions", value: quickActions, inline: false }
         ],
         footer: { text: "TCG Monitor - purchase assist only" }
       }

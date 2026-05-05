@@ -14,6 +14,8 @@ export interface CzStorePreset {
   language: "cs";
   active: false;
   trusted: boolean;
+  recommended: boolean;
+  testedStatus: string;
   sourceSummary: string;
   limitation: string;
 }
@@ -33,8 +35,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "403 / paused",
     sourceSummary: "Public Alza Pokemon cards listing sorted by price.",
-    limitation: "Alza can return HTTP 403 to automated public requests; keep paused until tested and rely on existing failure/backoff handling."
+    limitation: "Observed HTTP 403 for automated public requests; keep paused and rely on existing failure/backoff handling."
   },
   {
     id: "preset-cz-dracik",
@@ -50,8 +54,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "cart URL issue / paused",
     sourceSummary: "Public Dráčik Pokemon cards/product listing page.",
-    limitation: "Listing can include broad toy/category content; review scan previews before enabling alerts."
+    limitation: "Observed add-to-cart links on the listing; monitor must ignore basket/add URLs and keep any extracted cart URL as purchase-assist metadata only."
   },
   {
     id: "preset-cz-smarty",
@@ -67,8 +73,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "403 / paused",
     sourceSummary: "Public Smarty Pokemon TCG and One Piece TCG category pages.",
-    limitation: "Category pages are public HTML; prefer manual selector review before activating."
+    limitation: "Observed HTTP 403 for automated public requests; keep paused unless a safe public source works."
   },
   {
     id: "preset-cz-pompo",
@@ -84,8 +92,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "404 / paused",
     sourceSummary: "Public Pompo Pokemon category page with Pokemon TCG items mixed with toys.",
-    limitation: "Pokemon category includes non-card merchandise; keyword rules should filter TCG products."
+    limitation: "Observed HTTP 404 for the preset URL; keep paused until a safe working public listing is confirmed."
   },
   {
     id: "preset-cz-cardstore",
@@ -101,8 +111,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "fetch failed / paused",
     sourceSummary: "Public Cardstore Pokemon products and One Piece TCG category pages.",
-    limitation: "Shoptet-style category HTML can include sold-out products; verify stock parsing in scan previews."
+    limitation: "Observed fetch failure; keep paused unless a safe working public listing URL is confirmed."
   },
   {
     id: "preset-cz-luxor",
@@ -118,8 +130,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "0 products / paused",
     sourceSummary: "Public Luxor publisher/listing page for Pokemon Company products.",
-    limitation: "Luxor source may include Pokemon books and merch, not only sealed TCG; keep keyword filters enabled."
+    limitation: "Observed 0 extracted products; keep paused and review the source URL before enabling."
   },
   {
     id: "preset-cz-tolarie",
@@ -135,8 +149,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: false,
+    testedStatus: "generic page skipped / paused",
     sourceSummary: "Public Tolarie Pokemon products and One Piece TCG catalog pages.",
-    limitation: "Catalog pages are paginated; start with page one and broaden only after manual testing."
+    limitation: "Observed generic homepage/category data; parser should skip non-product homepage/category entries and complete with 0 products when no real products are present."
   },
   {
     id: "preset-cz-knihy-dobrovsky",
@@ -152,8 +168,10 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     language: "cs",
     active: false,
     trusted: true,
+    recommended: true,
+    testedStatus: "working",
     sourceSummary: "Public Knihy Dobrovský Pokemon TCG category page.",
-    limitation: "Availability can include supplier stock and sold-out items; verify event quality before enabling alerts."
+    limitation: "Observed successful HTML scan with real products, images, and prices. Recommended as the first store to enable and test."
   }
 ];
 
@@ -171,6 +189,8 @@ export function buildStorePresetNotes(preset: CzStorePreset, hasWebhook: boolean
     `Preset: ${preset.slug}.`,
     `Source: ${preset.sourceSummary}`,
     `Recommended interval: ${preset.pollingIntervalSeconds} seconds.`,
+    `Tested status: ${preset.testedStatus}.`,
+    `Recommended now: ${preset.recommended ? "yes" : "no"}.`,
     `Mode: ${preset.mode}.`,
     `Limitations: ${preset.limitation}`,
     webhookNote,
