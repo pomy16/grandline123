@@ -195,9 +195,12 @@ docker-compose.yml
 - Working candidates can be promoted to the store primary source from the UI.
 - The Playwright monitor now uses a standard browser context with configurable viewport, locale, timezone, cookies, network-idle waits, and optional selector readiness checks.
 - Rendered DOM extraction now supports product-card style category pages in addition to JSON-LD and configured selectors.
+- Product persistence now requires a real product URL and strong product evidence such as price, image, SKU/EAN, product ID, JSON-LD Product type, or a clear product card.
+- Category/listing/search/publisher pages remain valid source candidates, but are rejected as Product records.
 - Store status is clearer: `Active`, `Needs attention`, `Empty`, `Auto-paused`, and `Paused`.
 - Czech dynamic/error-prone presets now default to `PLAYWRIGHT` mode while staying paused until tested one by one.
 - Discovery and Playwright rendering still respect robots.txt and normal HTTP status handling; blocked sources fail safely instead of being bypassed.
+- Discord delivery now throttles sends per webhook route and retries HTTP 429 responses using Discord retry hints.
 
 ## Environment Variables
 
@@ -252,6 +255,9 @@ Important variables:
 | `PLAYWRIGHT_VIEWPORT_HEIGHT` | No | worker | Browser viewport height for standard Playwright rendering. |
 | `PLAYWRIGHT_TIMEZONE` | No | worker | Browser timezone for standard Playwright rendering. Defaults to `Europe/Prague`. |
 | `DISCORD_TIMEOUT_MS` | No | worker/API settings test | Discord delivery timeout. |
+| `DISCORD_SEND_DELAY_MS` | No | worker | Minimum delay between sends to the same Discord webhook route. Defaults to 500ms. |
+| `DISCORD_MAX_RETRIES` | No | worker | Maximum Discord delivery retries after rate limits. Defaults to 2. |
+| `DISCORD_RATE_LIMIT_BACKOFF_MS` | No | worker | Fallback Discord 429 backoff when no retry hint is provided. Defaults to 2500ms. |
 
 Use real Discord webhook URLs only when you are ready to test delivery.
 
@@ -472,11 +478,13 @@ Some stores may return HTTP 403, block automated requests, expose robots.txt res
 
 Purchase-assist link behavior:
 
-- Product URLs are real product detail URLs used for monitoring and opening product pages.
+- `SourceCandidate` URLs are monitor sources. They may be category, listing, search, publisher, sitemap, RSS, or API URLs such as `/pokemon-tcg`, `/booster`, or `/publisher/detail/...`.
+- Product URLs are real product detail URLs used for Product records, monitoring results, and opening product pages. Product persistence requires a meaningful title, product-specific URL, and strong product evidence.
 - `publicCartUrl` is only an optional manual shortcut extracted from public page markup when a valid product page/listing also exposes it.
 - Cart, basket, add-to-cart, checkout, order, and payment URLs are ignored as monitor source URLs and product URLs.
 - The app does not request `publicCartUrl` automatically. The user must click the UI or Discord link manually.
 - No automatic checkout, automatic purchasing, cart submission, order submission, or payment automation is implemented.
+- Existing incorrectly extracted products are not deleted automatically. Ignore them manually from Products if they were created before this validation fix.
 
 Do not use 1-second polling or aggressive retry behavior. Keep normal real-store intervals in the 180-300 second range unless you have a specific safe source and a reason to change it. Reserve 60-second polling for future high-priority watchlist functionality, not as the default for all stores.
 
@@ -571,7 +579,15 @@ From Stores, use `Discover` to queue a source discovery job. The worker checks:
 - OpenGraph URL metadata
 - public category links containing Pokemon, Pokémon, TCG, One Piece, or card keywords
 
-Discovery candidates are validated with the least suitable public monitor mode. Candidates with products are shown as `Target found` and can be promoted to the primary source. Empty, blocked, missing-structured-data, and failed candidates remain visible for diagnostics.
+Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated real products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, and publisher/listing pages can remain source candidates, but do not count as products and do not create events or Discord alerts.
+
+Recommended discovery test flow:
+
+1. Run `Discover` for one paused store.
+2. Promote only a candidate marked `Target found`.
+3. Run `Scan`.
+4. Check Products for real product detail URLs, prices/images/product IDs, and no category/control labels.
+5. Check Logs and notification delivery history for skipped non-products and Discord rate-limit retry details.
 
 ## Adding Keyword Rules
 
@@ -616,9 +632,13 @@ Current tests cover:
 - rendered product-card extraction
 - parser rejection of cart/add/checkout URLs as product URLs
 - manual `publicCartUrl` purchase-assist metadata
+- source candidate/product URL/publicCartUrl validation boundaries
+- Knihy Dobrovský category/control labels rejected as products
+- discovery target-found status based only on validated products
 - duplicate product detection
 - event generation and state hashing
 - Discord payload formatting
+- Discord 429 retry, throttling, and webhook URL redaction
 - real monitor safety behavior
 - API health route behavior
 - auth helper behavior
@@ -653,6 +673,8 @@ npm run build
 - Use store-specific webhook selection for personal store channels instead of creating public/community routing features.
 - Test delivery from Settings before activating broad alert rules.
 - Do not paste webhook URLs into scan logs, store notes, or issue reports.
+- If Discord returns HTTP 429, the worker reads `retry_after` or `Retry-After`, waits, retries conservatively, and marks delivery as failed only after retries are exhausted.
+- Notification logs preserve duplicate prevention and cooldown behavior; rate-limit logs include target/webhook name, attempts, retry delay, and final outcome without full webhook URLs.
 
 ## Troubleshooting
 
