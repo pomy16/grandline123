@@ -14,7 +14,8 @@ import {
   isPurchaseAssistUrl,
   isValidProductUrl,
   meaningfulProductTitle,
-  hasStrongProductSignal
+  hasStrongProductSignal,
+  cleanProductTitle
 } from "./parser-utils";
 
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
@@ -87,13 +88,25 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
     if (!isValidProductUrl(href, storeConfig)) continue;
 
     const imageTag = tag.match(/<img\b[^>]*>/i)?.[0] ?? "";
-    const title = stripHtml(tag) || attrValue(imageTag, "alt") || attrValue(imageTag, "title");
+    const headingText = tag.match(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/i)?.[0];
+    const title =
+      [
+        attrValue(imageTag, "alt"),
+        attrValue(imageTag, "title"),
+        attrValue(tag, "aria-label"),
+        attrValue(tag, "title"),
+        attrValue(tag, "data-name"),
+        headingText ? stripHtml(headingText) : null,
+        stripHtml(tag)
+      ]
+        .map((candidate) => (candidate ? cleanProductTitle(candidate) : null))
+        .find((candidate) => candidate && meaningfulProductTitle(candidate, storeConfig)) ?? null;
     if (!title) continue;
     if (!meaningfulProductTitle(title, storeConfig) || normalizeTitle(title).length < 4 || normalizeTitle(title) === normalizeTitle(storeConfig.name)) continue;
     const productTitle = title;
     if (inferGame(productTitle) === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${productTitle} ${href}`)) continue;
 
-    const localHtml = html.slice(Math.max(match.index - 600, 0), Math.min(match.index + tag.length + 900, html.length));
+    const localHtml = html.slice(match.index, Math.min(match.index + tag.length + 450, html.length));
     const priceText =
       localHtml.match(/(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?\s*(?:Kč|CZK|€|EUR)/i)?.[0] ??
       localHtml.match(/(?:Kč|CZK|€|EUR)\s*(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?/i)?.[0] ??
@@ -102,7 +115,7 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
     const canonicalUrl = normalizeUrl(href, storeConfig.baseUrl);
     const imageUrl = attrValue(imageTag, "src") ?? attrValue(imageTag, "data-src") ?? attrValue(imageTag, "data-original");
     const price = priceText ? parsePrice(priceText) : null;
-    const productCard = /(?:class|data-testid|itemtype)=["'][^"']*(?:product|produkt|item|card|box)/i.test(localHtml) || /<article\b/i.test(localHtml);
+    const productCard = /(?:class|data-testid|itemtype)=["'][^"']*(?:product|produkt|item|card|box)/i.test(tag) || /<article\b/i.test(tag);
     if (!hasStrongProductSignal({ url: canonicalUrl, storeConfig, price, imageUrl, productCard })) continue;
 
     products.push({

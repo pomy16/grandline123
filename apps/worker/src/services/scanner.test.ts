@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedProduct } from "@tcg-monitor/shared";
-import { detectEvents, stateHash } from "./scanner";
+import { detectEvents, mergeIncomingWithExisting, stateHash } from "./scanner";
 
 const incoming: NormalizedProduct = {
   title: "Pokemon TCG Booster Box",
@@ -40,5 +40,30 @@ describe("scan event generation", () => {
   it("generates stable state hashes for duplicate event detection", () => {
     expect(stateHash(incoming, "RESTOCK")).toBe(stateHash({ ...incoming }, "RESTOCK"));
     expect(stateHash(incoming, "RESTOCK")).not.toBe(stateHash({ ...incoming, price: 89.99 }, "RESTOCK"));
+  });
+
+  it("keeps existing price and game when a rendered card temporarily misses them", () => {
+    const merged = mergeIncomingWithExisting(
+      {
+        price: 269 as never,
+        imageUrl: "https://example.com/old.jpg",
+        category: "Sealed",
+        game: "POKEMON"
+      },
+      {
+        ...incoming,
+        price: null,
+        imageUrl: null,
+        category: null,
+        game: "UNKNOWN"
+      }
+    );
+
+    expect(merged).toMatchObject({
+      price: 269,
+      imageUrl: "https://example.com/old.jpg",
+      category: "Sealed",
+      game: "POKEMON"
+    });
   });
 });

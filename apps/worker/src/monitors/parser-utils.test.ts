@@ -111,7 +111,7 @@ describe("product parser normalization", () => {
   });
 
   it("rejects navigation, load-more, and stock labels as product titles", () => {
-    for (const title of ["Načíst dalších", "Načíst dalších 24", "Další", "Více", "Zobrazit další", "Nedostupné", "Skladem", "Vyprodáno", "Předobjednávka"]) {
+    for (const title of ["Načíst dalších", "Načíst dalších 24", "Další", "Více", "Zobrazit další", "Nedostupné", "Skladem", "Vyprodáno", "Předobjednávka", "Bestseller", "Na prodejně"]) {
       expect(productFromUnknown({ "@type": "Product", name: title, url: "/hra/demo-produkt-123", image: "/img.jpg" }, store, "html-monitor-jsonld")).toBeNull();
     }
   });
@@ -148,6 +148,34 @@ describe("product parser normalization", () => {
       stockStatus: "IN_STOCK",
       game: "POKEMON"
     });
+  });
+
+  it("prefers image alt text over badges and trims stock/price noise from product-card titles", () => {
+    const products = productsFromProductCards(
+      `
+        <article class="product">
+          <a href="/hra/pokemon-tcg-scarlet-violet-09-journey-together-booster-792762991">
+            <span>Bestseller</span>
+            <img src="/img.jpg" alt="Pokémon TCG: Scarlet & Violet 09 Journey Together - Booster" />
+          </a>
+          <span>Na prodejně</span>
+          <strong>149 Kč</strong>
+        </article>
+        <article class="product">
+          <a href="/pokemon-tcg-sv10-destined-rivals-booster_z236308/">
+            2 Pokémon TCG: SV10 Destined Rivals - Booster Skladem online DMOC: 249 Kč 229 Kč
+          </a>
+        </article>
+      `,
+      { ...store, name: "Knihy Dobrovský", baseUrl: "https://www.knihydobrovsky.cz", listingUrls: ["https://www.knihydobrovsky.cz/pokemon-tcg"], currency: "CZK" },
+      "https://www.knihydobrovsky.cz/pokemon-tcg",
+      "playwright-monitor"
+    );
+
+    expect(products.map((product) => product.title)).toEqual([
+      "Pokémon TCG: Scarlet & Violet 09 Journey Together - Booster",
+      "Pokémon TCG: SV10 Destined Rivals - Booster"
+    ]);
   });
 
   it("skips rendered category controls and labels from product-card extraction", () => {

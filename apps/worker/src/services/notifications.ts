@@ -151,6 +151,20 @@ export async function notifyProductEvent(eventId: string) {
     where: { id: eventId },
     include: { product: { include: { store: true } } }
   });
+  if (event.type === "PRODUCT_UPDATED" && process.env.NOTIFY_PRODUCT_UPDATED !== "true") {
+    await prisma.notificationLog.create({
+      data: {
+        productId: event.productId,
+        eventId: event.id,
+        target: "DEFAULT",
+        status: "SKIPPED",
+        payloadHash: stateHashForEvent(event),
+        error: "PRODUCT_UPDATED Discord notifications are disabled by default."
+      }
+    });
+    return { status: "SKIPPED", reason: "PRODUCT_UPDATED notifications disabled." };
+  }
+
   const metadata = readMetadata(event);
   const cooldownSeconds = Number(metadata.matchedKeywordRuleCooldownSeconds ?? (await getGlobalCooldownSeconds()));
   const webhook = await resolveWebhook({

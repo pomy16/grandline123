@@ -94,7 +94,32 @@ export function isProductControlTitle(title: string | null): boolean {
   const normalized = normalizeTitle(title);
   if (!normalized) return true;
   if (/^(nacist dalsich|nacist dalsi|dalsi|vice|zobrazit dalsi)(\s+\d+)?$/.test(normalized)) return true;
-  return ["nedostupne", "skladem", "vyprodano", "predobjednavka", "out of stock", "in stock", "available", "unavailable"].includes(normalized);
+  return [
+    "nedostupne",
+    "skladem",
+    "vyprodano",
+    "predobjednavka",
+    "out of stock",
+    "in stock",
+    "available",
+    "unavailable",
+    "bestseller",
+    "na prodejne",
+    "novinka",
+    "akce",
+    "tip"
+  ].includes(normalized);
+}
+
+export function cleanProductTitle(title: string) {
+  return decodeEntities(title)
+    .replace(/^\s*\d+\s+(?=\S)/, "")
+    .replace(/\b(Bestseller|Novinka|Akce|Tip|Na prodejně|Skladem online|Skladem v prodejně|Dostupné v jiných prodejnách|Nedostupné)\b/gi, " ")
+    .replace(/DMOC:\s*(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?\s*(?:Kč|CZK)/gi, " ")
+    .replace(/(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?\s*(?:Kč|CZK|€|EUR)/gi, " ")
+    .replace(/\s+-\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export function hasProductDetailUrlPattern(url: string | null, storeConfig: StoreConfig): boolean {
@@ -202,7 +227,8 @@ export function productFromUnknown(item: unknown, storeConfig: StoreConfig, sour
   const offers = record.offers && typeof record.offers === "object" ? (Array.isArray(record.offers) ? record.offers[0] : record.offers) : null;
   const offer = offers && typeof offers === "object" ? (offers as Record<string, unknown>) : {};
   const imageCandidate = Array.isArray(record.image) ? record.image[0] : record.image;
-  const title = pickString(record.title, record.name, record.productName, record.headline);
+  const rawTitle = pickString(record.title, record.name, record.productName, record.headline);
+  const title = rawTitle ? cleanProductTitle(rawTitle) : null;
   const canonicalUrl = firstValidProductUrl(storeConfig, record.productUrl, record.url, record.link, record["@id"], offer.url);
   const type = Array.isArray(record["@type"]) ? record["@type"].join(" ") : pickString(record["@type"], record.type);
   const jsonLdProduct = /\bProduct\b/i.test(type ?? "");

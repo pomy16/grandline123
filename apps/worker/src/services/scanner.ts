@@ -60,6 +60,20 @@ function rawField(product: NormalizedProduct, key: string): string | number | bo
   return null;
 }
 
+export function mergeIncomingWithExisting(
+  existing: Pick<Product, "price" | "imageUrl" | "category" | "game"> | null,
+  incoming: NormalizedProduct
+): NormalizedProduct {
+  if (!existing) return incoming;
+  return {
+    ...incoming,
+    price: incoming.price ?? (existing.price ? Number(existing.price) : null),
+    imageUrl: incoming.imageUrl ?? existing.imageUrl,
+    category: incoming.category ?? existing.category,
+    game: incoming.game === "UNKNOWN" ? existing.game : incoming.game
+  };
+}
+
 async function persistProduct(store: Store, incoming: NormalizedProduct) {
   const existing = await prisma.product.findUnique({
     where: {
@@ -69,7 +83,8 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
       }
     }
   });
-  const events = detectEvents(existing, incoming);
+  const mergedIncoming = mergeIncomingWithExisting(existing, incoming);
+  const events = detectEvents(existing, mergedIncoming);
   const changed = events.length > 0;
 
   const product = await prisma.product.upsert({
@@ -80,41 +95,41 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
       }
     },
     update: {
-      title: incoming.title,
-      normalizedTitle: incoming.normalizedTitle,
-      url: incoming.url,
-      imageUrl: incoming.imageUrl,
+      title: mergedIncoming.title,
+      normalizedTitle: mergedIncoming.normalizedTitle,
+      url: mergedIncoming.url,
+      imageUrl: mergedIncoming.imageUrl,
       publicCartUrl: incoming.publicCartUrl ?? null,
       previousPrice: existing?.price ?? null,
-      price: incoming.price,
-      currency: incoming.currency,
-      stockStatus: incoming.stockStatus,
-      isAvailable: incoming.isAvailable,
-      isPreorder: incoming.isPreorder,
-      sku: incoming.sku,
-      ean: incoming.ean,
-      category: incoming.category,
-      game: incoming.game,
+      price: mergedIncoming.price,
+      currency: mergedIncoming.currency,
+      stockStatus: mergedIncoming.stockStatus,
+      isAvailable: mergedIncoming.isAvailable,
+      isPreorder: mergedIncoming.isPreorder,
+      sku: mergedIncoming.sku,
+      ean: mergedIncoming.ean,
+      category: mergedIncoming.category,
+      game: mergedIncoming.game,
       lastSeenAt: new Date(),
       lastChangedAt: changed ? new Date() : existing?.lastChangedAt
     },
     create: {
       storeId: store.id,
-      title: incoming.title,
-      normalizedTitle: incoming.normalizedTitle,
-      url: incoming.url,
-      canonicalUrl: incoming.canonicalUrl,
-      imageUrl: incoming.imageUrl,
+      title: mergedIncoming.title,
+      normalizedTitle: mergedIncoming.normalizedTitle,
+      url: mergedIncoming.url,
+      canonicalUrl: mergedIncoming.canonicalUrl,
+      imageUrl: mergedIncoming.imageUrl,
       publicCartUrl: incoming.publicCartUrl ?? null,
-      price: incoming.price,
-      currency: incoming.currency,
-      stockStatus: incoming.stockStatus,
-      isAvailable: incoming.isAvailable,
-      isPreorder: incoming.isPreorder,
-      sku: incoming.sku,
-      ean: incoming.ean,
-      category: incoming.category,
-      game: incoming.game,
+      price: mergedIncoming.price,
+      currency: mergedIncoming.currency,
+      stockStatus: mergedIncoming.stockStatus,
+      isAvailable: mergedIncoming.isAvailable,
+      isPreorder: mergedIncoming.isPreorder,
+      sku: mergedIncoming.sku,
+      ean: mergedIncoming.ean,
+      category: mergedIncoming.category,
+      game: mergedIncoming.game,
       firstSeenAt: new Date(),
       lastSeenAt: new Date(),
       lastChangedAt: new Date()
@@ -124,13 +139,13 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
   await prisma.productSnapshot.create({
     data: {
       productId: product.id,
-      title: incoming.title,
-      price: incoming.price,
-      imageUrl: incoming.imageUrl,
-      stockStatus: incoming.stockStatus,
-      isAvailable: incoming.isAvailable,
-      isPreorder: incoming.isPreorder,
-      rawData: incoming.rawData as never
+      title: mergedIncoming.title,
+      price: mergedIncoming.price,
+      imageUrl: mergedIncoming.imageUrl,
+      stockStatus: mergedIncoming.stockStatus,
+      isAvailable: mergedIncoming.isAvailable,
+      isPreorder: mergedIncoming.isPreorder,
+      rawData: mergedIncoming.rawData as never
     }
   });
 
@@ -151,15 +166,15 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
               }
             : undefined,
           newValue: {
-            title: incoming.title,
-            price: incoming.price ?? null,
-            stockStatus: incoming.stockStatus,
-            imageUrl: incoming.imageUrl ?? null,
-            isAvailable: incoming.isAvailable,
-            isPreorder: incoming.isPreorder
+            title: mergedIncoming.title,
+            price: mergedIncoming.price ?? null,
+            stockStatus: mergedIncoming.stockStatus,
+            imageUrl: mergedIncoming.imageUrl ?? null,
+            isAvailable: mergedIncoming.isAvailable,
+            isPreorder: mergedIncoming.isPreorder
           },
           metadata: {
-            stateHash: stateHash(incoming, type),
+            stateHash: stateHash(mergedIncoming, type),
             phase: "phase-3-discord-notifications",
             matchedKeywordRuleId: rawField(incoming, "matchedKeywordRuleId"),
             matchedKeywordRuleName: rawField(incoming, "matchedKeywordRuleName"),

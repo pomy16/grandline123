@@ -18,6 +18,32 @@ function placeholderWebhookUrl(name: string) {
   return `https://example.invalid/discord-webhook-placeholder/${name}`;
 }
 
+const sealedExcludeKeywords = [
+  "used",
+  "damaged",
+  "digital",
+  "proxy",
+  "fake",
+  "custom",
+  "sleeve only",
+  "empty box",
+  "opened",
+  "resealed",
+  "deck protector",
+  "deck box",
+  "obaly",
+  "obaly na karty",
+  "album",
+  "pro-binder",
+  "kroužkové album",
+  "krabička na karty",
+  "folie",
+  "fólie",
+  "toploader",
+  "playmat",
+  "podložka"
+];
+
 async function seedAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.ADMIN_PASSWORD ?? "change-me";
@@ -81,7 +107,7 @@ async function seedRules() {
     where: { id: "seed-rule-pokemon-sealed" },
     update: {
       includeKeywords: ["pokemon", "pokémon", "pokemon tcg", "booster box", "elite trainer box", "etb", "display", "blister"],
-      excludeKeywords: ["used", "damaged", "digital", "proxy", "fake", "custom", "sleeve only", "empty box", "opened", "resealed"],
+      excludeKeywords: sealedExcludeKeywords,
       priority: "HIGH",
       webhookTarget: "POKEMON",
       cooldownSeconds: 900,
@@ -91,7 +117,7 @@ async function seedRules() {
       id: "seed-rule-pokemon-sealed",
       name: "Pokemon sealed products",
       includeKeywords: ["pokemon", "pokémon", "pokemon tcg", "booster box", "elite trainer box", "etb", "display", "blister"],
-      excludeKeywords: ["used", "damaged", "digital", "proxy", "fake", "custom", "sleeve only", "empty box", "opened", "resealed"],
+      excludeKeywords: sealedExcludeKeywords,
       category: "Sealed",
       game: "POKEMON",
       priority: "HIGH",
@@ -104,7 +130,7 @@ async function seedRules() {
     where: { id: "seed-rule-one-piece-sealed" },
     update: {
       includeKeywords: ["one piece card game", "op booster", "starter deck", "romance dawn", "paramount war", "awakening of the new era"],
-      excludeKeywords: ["used", "damaged", "digital", "proxy", "fake", "custom", "sleeve only", "empty box", "opened", "resealed"],
+      excludeKeywords: sealedExcludeKeywords,
       priority: "HIGH",
       webhookTarget: "ONE_PIECE",
       cooldownSeconds: 900,
@@ -114,7 +140,7 @@ async function seedRules() {
       id: "seed-rule-one-piece-sealed",
       name: "One Piece sealed products",
       includeKeywords: ["one piece card game", "op booster", "starter deck", "romance dawn", "paramount war", "awakening of the new era"],
-      excludeKeywords: ["used", "damaged", "digital", "proxy", "fake", "custom", "sleeve only", "empty box", "opened", "resealed"],
+      excludeKeywords: sealedExcludeKeywords,
       category: "Sealed",
       game: "ONE_PIECE",
       priority: "HIGH",
@@ -125,12 +151,12 @@ async function seedRules() {
 
   await prisma.keywordRule.upsert({
     where: { id: "seed-rule-price-drop" },
-    update: { active: true, priority: "CRITICAL", webhookTarget: "HIGH_PRIORITY" },
+    update: { active: true, priority: "CRITICAL", webhookTarget: "HIGH_PRIORITY", excludeKeywords: sealedExcludeKeywords },
     create: {
       id: "seed-rule-price-drop",
       name: "High priority sealed discounts",
       includeKeywords: ["booster", "display", "elite trainer box", "starter deck"],
-      excludeKeywords: ["used", "damaged", "opened", "resealed"],
+      excludeKeywords: sealedExcludeKeywords,
       category: "Sealed",
       game: "BOTH",
       maxPrice: "100.00",
