@@ -2,7 +2,7 @@
 
 A production-oriented full-stack monitoring platform for e-commerce products focused on Pokemon TCG and One Piece Card Game sealed products.
 
-The current delivery includes **Phase 1 through Phase 10**: full-stack architecture, admin workflows, Discord notification routing, real public-source monitor adapters, polished dashboard UX, production hardening, CI, tests, improved seed data, store-specific routing, Czech store presets, safer parser behavior, and deployment documentation.
+The current delivery includes **Phase 1 through Phase 11**: full-stack architecture, admin workflows, Discord notification routing, real public-source monitor adapters, polished dashboard UX, production hardening, CI, tests, improved seed data, store-specific routing, Czech store presets, safer parser behavior, automated public-source discovery, and deployment documentation.
 
 ## Safety and Compliance
 
@@ -188,6 +188,17 @@ docker-compose.yml
 - Added disabled-by-default presets for Veselý Drak, TCG Karty, Gengar.cz, and Hra na netu.
 - Preset tests now cover unique slugs, safe polling intervals, safe URL paths, paused defaults, and webhook-name routing.
 
+## Phase 11 Features
+
+- Source candidates are persisted per store and can be inspected from the Stores dashboard.
+- A manual Discovery scan queues a worker job that checks public listing URLs, sitemap.xml, sitemap indexes, RSS/Atom candidates, JSON-LD, OpenGraph URLs, and keyword-matching category links.
+- Working candidates can be promoted to the store primary source from the UI.
+- The Playwright monitor now uses a standard browser context with configurable viewport, locale, timezone, cookies, network-idle waits, and optional selector readiness checks.
+- Rendered DOM extraction now supports product-card style category pages in addition to JSON-LD and configured selectors.
+- Store status is clearer: `Active`, `Needs attention`, `Empty`, `Auto-paused`, and `Paused`.
+- Czech dynamic/error-prone presets now default to `PLAYWRIGHT` mode while staying paused until tested one by one.
+- Discovery and Playwright rendering still respect robots.txt and normal HTTP status handling; blocked sources fail safely instead of being bypassed.
+
 ## Environment Variables
 
 Copy the example file:
@@ -236,6 +247,10 @@ Important variables:
 | `HTML_MONITOR_MAX_PRODUCT_PAGES` | No | worker | Maximum HTML product pages per listing scan. |
 | `SITEMAP_MONITOR_MAX_SITEMAPS` | No | worker | Maximum sitemap files to inspect. |
 | `SITEMAP_MONITOR_MAX_PRODUCT_PAGES` | No | worker | Maximum sitemap product pages to inspect. |
+| `DISCOVERY_MAX_CANDIDATES` | No | worker | Maximum public source candidates to validate in one discovery scan. |
+| `PLAYWRIGHT_VIEWPORT_WIDTH` | No | worker | Browser viewport width for standard Playwright rendering. |
+| `PLAYWRIGHT_VIEWPORT_HEIGHT` | No | worker | Browser viewport height for standard Playwright rendering. |
+| `PLAYWRIGHT_TIMEZONE` | No | worker | Browser timezone for standard Playwright rendering. Defaults to `Europe/Prague`. |
 | `DISCORD_TIMEOUT_MS` | No | worker/API settings test | Discord delivery timeout. |
 
 Use real Discord webhook URLs only when you are ready to test delivery.
@@ -404,6 +419,7 @@ Stores support:
 - notes
 - optional store-specific Discord webhook
 - trusted store flag and public cart URL for purchase-assist mode
+- source candidates discovered from public metadata, feeds, sitemaps, and rendered category pages
 
 Real `API`, `HTML`, `SITEMAP`, `RSS`, and optional `PLAYWRIGHT` adapters are available.
 
@@ -417,27 +433,28 @@ The seed links each preset to a store-specific Discord webhook only when a webho
 
 | Store | Webhook name | Source URL(s) | Mode | Interval | Tested status | Default |
 | --- | --- | --- | --- | --- | --- | --- |
-| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `HTML` | 300s | 403 / paused | paused |
-| Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `HTML` | 180s | cart URL issue / paused | paused |
-| Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `HTML` | 180s | 403 / paused | paused |
-| Pompo | `cz-pompo` | `https://pompo.cz/pokemon-tcg/` | `HTML` | 300s | candidate URL / paused | paused |
-| Cardstore | `cz-cardstore` | `https://www.cardstore.cz/pokemon-produkty/`, `https://www.cardstore.cz/one-piece-tcg/` | `HTML` | 180s | fetch failed / paused | paused |
-| Luxor | `cz-luxor` | `https://www.luxor.cz/clanek/727/pokemon-day` | `HTML` | 180s | candidate URL / paused | paused |
-| Tolarie | `cz-tolarie` | `https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/`, `https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/` | `HTML` | 180s | generic page skipped / paused | paused |
-| Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `HTML` | 300s | working | paused |
-| Veselý Drak | `cz-vesely-drak` | `https://www.vesely-drak.cz/produkty/boostery/`, `https://www.vesely-drak.cz/produkty/one-piece-card-game/` | `HTML` | 180s | candidate / paused | paused |
-| TCG Karty | `cz-tcgkarty` | `https://www.tcgkarty.cz/tcg-pokemon`, `https://www.tcgkarty.cz/tcg-one-piece` | `HTML` | 180s | candidate / paused | paused |
-| Gengar.cz | `cz-gengar` | `https://www.gengar.cz/pokemon`, `https://www.gengar.cz/one-piece` | `HTML` | 180s | candidate / paused | paused |
-| Hra na netu | `cz-hranane-tu` | `https://www.hrananetu.cz/kategorie-pokemon` | `HTML` | 300s | candidate / paused | paused |
+| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `PLAYWRIGHT` | 300s | needs attention / paused | paused |
+| Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `PLAYWRIGHT` | 180s | 0 products after cart URL safety fix / paused | paused |
+| Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `PLAYWRIGHT` | 180s | needs attention / paused | paused |
+| Pompo | `cz-pompo` | `https://pompo.cz/pokemon-tcg/` | `PLAYWRIGHT` | 300s | candidate URL / paused | paused |
+| Cardstore | `cz-cardstore` | `https://www.cardstore.cz/pokemon-produkty/`, `https://www.cardstore.cz/one-piece-tcg/` | `PLAYWRIGHT` | 180s | fetch failed / paused | paused |
+| Luxor | `cz-luxor` | `https://www.luxor.cz/clanek/727/pokemon-day` | `PLAYWRIGHT` | 180s | candidate URL / paused | paused |
+| Tolarie | `cz-tolarie` | `https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/`, `https://www.tolarie.cz/koupit_produkty/katalog/70-one-piece/` | `PLAYWRIGHT` | 180s | generic page skipped / paused | paused |
+| Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `PLAYWRIGHT` | 300s | working | paused |
+| Veselý Drak | `cz-vesely-drak` | `https://www.vesely-drak.cz/produkty/boostery/`, `https://www.vesely-drak.cz/produkty/one-piece-card-game/` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
+| TCG Karty | `cz-tcgkarty` | `https://www.tcgkarty.cz/tcg-pokemon`, `https://www.tcgkarty.cz/tcg-one-piece` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
+| Gengar.cz | `cz-gengar` | `https://www.gengar.cz/pokemon`, `https://www.gengar.cz/one-piece` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
+| Hra na netu | `cz-hranane-tu` | `https://www.hrananetu.cz/kategorie-pokemon` | `PLAYWRIGHT` | 300s | candidate / paused | paused |
 
 Recommended one-by-one test flow:
 
 1. Open Settings and create or update webhook records named `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, `cz-knihy-dobrovsky`, `cz-vesely-drak`, `cz-tcgkarty`, `cz-gengar`, and `cz-hranane-tu`.
 2. Paste real webhook URLs only in Settings, not in code, seed files, README, store notes, or logs.
 3. Open Stores and verify each preset has the expected store-specific webhook selected.
-4. Enable one store at a time.
-5. Run a manual scan.
-6. Review Logs, Products, and Events before enabling the next store.
+4. Run a Discovery scan for one store at a time.
+5. Review Source candidates and promote only candidates marked `Target found`.
+6. Enable that store and run a manual scan.
+7. Review Logs, Products, and Events before testing the next store.
 
 Knihy Dobrovský is currently the only preset marked as working/recommended. Other stores should stay paused until a safe public source is confirmed through a local manual scan.
 
@@ -451,7 +468,7 @@ Reviewed source notes:
 - Tolarie should remain paused; old generic homepage/category products should be ignored.
 - New Veselý Drak, TCG Karty, Gengar.cz, and Hra na netu presets are candidates only and are paused by default.
 
-Some stores may return HTTP 403, block automated requests, expose robots.txt restrictions, return 404, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
+Some stores may return HTTP 403, block automated requests, expose robots.txt restrictions, return 404, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, source candidates marked `Needs attention`, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
 
 Purchase-assist link behavior:
 
@@ -543,6 +560,19 @@ npx playwright install chromium
 
 Do not use Playwright to bypass CAPTCHA, queues, bot checks, login walls, checkout restrictions, or any store protection. It is only for rendering public pages when simpler public sources are unavailable.
 
+### Discovery Dashboard
+
+From Stores, use `Discover` to queue a source discovery job. The worker checks:
+
+- configured listing URLs
+- `/sitemap.xml` and `/sitemap_index.xml`
+- public RSS/Atom candidates such as `/rss`, `/rss.xml`, `/feed`, and `/atom.xml`
+- JSON-LD product data
+- OpenGraph URL metadata
+- public category links containing Pokemon, Pokémon, TCG, One Piece, or card keywords
+
+Discovery candidates are validated with the least suitable public monitor mode. Candidates with products are shown as `Target found` and can be promoted to the primary source. Empty, blocked, missing-structured-data, and failed candidates remain visible for diagnostics.
+
 ## Adding Keyword Rules
 
 Rules support include keywords, exclude keywords, game, category, min and max price, priority, webhook target, case-insensitive matching, optional fuzzy matching, and cooldown seconds.
@@ -579,9 +609,11 @@ Current tests cover:
 
 - shared normalization utilities
 - Czech store preset safety, URL paths, polling intervals, paused defaults, and routing metadata
+- source candidate seed metadata and Playwright-mode preset coverage
 - keyword rule matching
 - price parsing
 - product parsing and normalization
+- rendered product-card extraction
 - parser rejection of cart/add/checkout URLs as product URLs
 - manual `publicCartUrl` purchase-assist metadata
 - duplicate product detection

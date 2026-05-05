@@ -73,7 +73,7 @@ storesRouter.get("/", async (request, response) => {
     prisma.store.findMany({
       where,
       orderBy: { [sortBy]: sortOrder },
-      include: { discordWebhook: true, _count: { select: { products: true, scanJobs: true } } },
+      include: { discordWebhook: true, sourceCandidates: { take: 3, orderBy: [{ status: "asc" }, { updatedAt: "desc" }] }, _count: { select: { products: true, scanJobs: true, sourceCandidates: true } } },
       skip,
       take: pageSize
     }),
@@ -100,6 +100,7 @@ storesRouter.get("/:id", async (request, response) => {
     include: {
       products: { take: 20, orderBy: { lastSeenAt: "desc" } },
       scanJobs: { take: 20, orderBy: { createdAt: "desc" } },
+      sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] },
       discordWebhook: true
     }
   });
@@ -151,4 +152,49 @@ storesRouter.post("/:id/scan", async (request, response) => {
   });
   const job = await scanQueue.add("scan-store", { storeId: request.params.id, scanJobId: scanJob.id });
   response.status(202).json({ data: { scanJob, queueJobId: job.id } });
+});
+
+storesRouter.post("/:id/discover", async (request, response) => {
+  const scanJob = await prisma.scanJob.create({
+    data: {
+      storeId: request.params.id,
+      status: "QUEUED",
+      metadata: { type: "discovery", triggeredBy: request.user?.email ?? "api" }
+    }
+  });
+  const job = await scanQueue.add("discover-store", { storeId: request.params.id, scanJobId: scanJob.id });
+  response.status(202).json({ data: { scanJob, queueJobId: job.id } });
+});
+
+storesRouter.post("/:id/source-candidates/:candidateId/promote", async (request, response) => {
+  const candidate = await prisma.sourceCandidate.findFirst({
+    where: { id: request.params.candidateId, storeId: request.params.id }
+  });
+  if (!candidate) {
+    response.status(404).json({ error: "Source candidate not found." });
+    return;
+  }
+  if (candidate.status !== "ACTIVE") {
+    response.status(400).json({ error: "Only active source candidates can be promoted." });
+    return;
+  }
+
+  const store = await prisma.store.update({
+    where: { id: request.params.id },
+    data: {
+      listingUrls: [candidate.url],
+      mode: candidate.monitorMode,
+      lastError: null,
+      repeatedFailureCount: 0,
+      autoPausedAfterFailures: false,
+      sourceCandidates: {
+        update: {
+          where: { id: candidate.id },
+          data: { promotedAt: new Date() }
+        }
+      }
+    },
+    include: { sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] } }
+  });
+  response.json({ data: store });
 });

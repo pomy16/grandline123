@@ -7,6 +7,8 @@ import {
   selectorHref,
   selectorImage,
   selectorText,
+  stripHtml,
+  attrValue,
   normalizeStockStatus,
   uniqueProducts,
   isPurchaseAssistUrl,
@@ -67,6 +69,50 @@ export function productLinks(html: string, storeConfig: StoreConfig) {
   return [...links].slice(0, Number(process.env.HTML_MONITOR_MAX_PRODUCT_PAGES ?? 25));
 }
 
+export function productsFromProductCards(html: string, storeConfig: StoreConfig, pageUrl: string, source: string) {
+  const products: NormalizedProduct[] = [];
+  const anchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = anchorRegex.exec(html))) {
+    const tag = match[0];
+    const href = match[1];
+    if (!isValidProductUrl(href, storeConfig)) continue;
+
+    const imageTag = tag.match(/<img\b[^>]*>/i)?.[0] ?? "";
+    const title = stripHtml(tag) || attrValue(imageTag, "alt") || attrValue(imageTag, "title");
+    if (!title || normalizeTitle(title).length < 4 || normalizeTitle(title) === normalizeTitle(storeConfig.name)) continue;
+    if (inferGame(title) === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${title} ${href}`)) continue;
+
+    const localHtml = html.slice(Math.max(match.index - 600, 0), Math.min(match.index + tag.length + 900, html.length));
+    const priceText =
+      localHtml.match(/(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?\s*(?:Kč|CZK|€|EUR)/i)?.[0] ??
+      localHtml.match(/(?:Kč|CZK|€|EUR)\s*(?:\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.]\d{1,2})?/i)?.[0] ??
+      null;
+    const stock = normalizeStockStatus(localHtml);
+    const canonicalUrl = normalizeUrl(href, storeConfig.baseUrl);
+
+    products.push({
+      title,
+      normalizedTitle: normalizeTitle(title),
+      url: canonicalUrl,
+      canonicalUrl,
+      imageUrl: attrValue(imageTag, "src") ?? attrValue(imageTag, "data-src") ?? attrValue(imageTag, "data-original"),
+      publicCartUrl: publicCartLink(localHtml, storeConfig),
+      price: priceText ? parsePrice(priceText) : null,
+      currency: storeConfig.currency,
+      ...stock,
+      sku: null,
+      ean: null,
+      category: null,
+      game: inferGame(title),
+      rawData: { source, pageUrl, parser: "product-card" }
+    });
+  }
+
+  return uniqueProducts(products);
+}
+
 export class HtmlMonitor implements StoreMonitor {
   warnings: string[] = [];
 
@@ -114,6 +160,7 @@ export function productsFromHtmlDocument(html: string, storeConfig: StoreConfig,
     const product = productFromUnknown(item, storeConfig, source);
     if (product) products.push(product);
   }
+  products.push(...productsFromProductCards(html, storeConfig, pageUrl, source));
   const selected = productFromSelectors(html, storeConfig, pageUrl);
   if (selected) products.push({ ...selected, rawData: { source, pageUrl, parser: "selectors" } });
   return uniqueProducts(products);

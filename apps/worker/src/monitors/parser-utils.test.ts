@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StoreConfig } from "@tcg-monitor/shared";
-import { productLinks, productsFromHtmlDocument, publicCartLink } from "./html-monitor";
+import { productLinks, productsFromHtmlDocument, productsFromProductCards, publicCartLink } from "./html-monitor";
 import { isPurchaseAssistUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
 
 const store: StoreConfig = {
@@ -106,5 +106,32 @@ describe("product parser normalization", () => {
 
     expect(productLinks(html, store)).toEqual(["https://shop.example/pokemon-booster"]);
     expect(publicCartLink(html, store)).toBe("https://shop.example/basket/add/?product_id=64044");
+  });
+
+  it("extracts product cards from rendered category DOM", () => {
+    const products = productsFromProductCards(
+      `
+        <article class="product">
+          <a href="/pokemon-tcg/prismatic-evolutions-booster">
+            <img src="/img/pokemon.jpg" alt="Pokémon TCG Prismatic Evolutions Booster" />
+            <span>Pokémon TCG Prismatic Evolutions Booster</span>
+          </a>
+          <strong>129 Kč</strong>
+          <span>Skladem</span>
+        </article>
+      `,
+      { ...store, currency: "CZK" },
+      "https://shop.example/products",
+      "playwright-monitor"
+    );
+
+    expect(products[0]).toMatchObject({
+      title: "Pokémon TCG Prismatic Evolutions Booster",
+      canonicalUrl: "https://shop.example/pokemon-tcg/prismatic-evolutions-booster",
+      imageUrl: "/img/pokemon.jpg",
+      price: 129,
+      stockStatus: "IN_STOCK",
+      game: "POKEMON"
+    });
   });
 });
