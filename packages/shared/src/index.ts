@@ -10,7 +10,16 @@ export type EventType =
   | "PREORDER_OPENED"
   | "PRODUCT_UPDATED";
 export type AlertPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
-export type WebhookTarget = "DEFAULT" | "POKEMON" | "ONE_PIECE" | "HIGH_PRIORITY" | "ERROR_LOG";
+export type WebhookTarget =
+  | "DEFAULT"
+  | "POKEMON"
+  | "ONE_PIECE"
+  | "HIGH_PRIORITY"
+  | "ERROR_LOG"
+  | "TEST"
+  | "RESTOCK"
+  | "PRICE_DROP"
+  | "PREORDER";
 
 export interface NormalizedProduct {
   title: string;

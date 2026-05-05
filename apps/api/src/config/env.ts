@@ -1,5 +1,7 @@
 import { readNumber, readRequiredString, readUrl, requireProductionSecret } from "../lib/env";
+import { loadLocalEnv } from "../lib/load-local-env";
 
+loadLocalEnv();
 const source = process.env;
 
 export const env = {

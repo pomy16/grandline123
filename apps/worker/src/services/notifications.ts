@@ -6,7 +6,7 @@ import { buildDiscordPayload, sendWebhook } from "./discord";
 
 type EventWithProduct = ProductEvent & {
   product: Product & {
-    store: { name: string };
+    store: { name: string; discordWebhookId: string | null };
   };
 };
 
@@ -27,34 +27,58 @@ function priceLabel(value: unknown, currency: string) {
   return `${String(value)} ${currency}`;
 }
 
-function targetCandidates(productGame: Game, priority?: AlertPriority | null, ruleTarget?: WebhookTarget | null): WebhookTarget[] {
-  const targets: WebhookTarget[] = [];
+type WebhookRouteCandidate = { kind: "target"; target: WebhookTarget } | { kind: "webhookId"; webhookId: string };
 
-  if ((priority === "HIGH" || priority === "CRITICAL") && !targets.includes("HIGH_PRIORITY")) {
-    targets.push("HIGH_PRIORITY");
-  }
-  if (ruleTarget && ruleTarget !== "DEFAULT" && !targets.includes(ruleTarget)) {
-    targets.push(ruleTarget);
-  }
-  if ((productGame === "POKEMON" || productGame === "BOTH") && !targets.includes("POKEMON")) {
-    targets.push("POKEMON");
-  }
-  if ((productGame === "ONE_PIECE" || productGame === "BOTH") && !targets.includes("ONE_PIECE")) {
-    targets.push("ONE_PIECE");
-  }
-  if (!targets.includes("DEFAULT")) {
-    targets.push("DEFAULT");
-  }
-
-  return targets;
+function addTarget(candidates: WebhookRouteCandidate[], target: WebhookTarget | null | undefined) {
+  if (!target) return;
+  if (candidates.some((candidate) => candidate.kind === "target" && candidate.target === target)) return;
+  candidates.push({ kind: "target", target });
 }
 
-async function resolveWebhook(productGame: Game, priority?: AlertPriority | null, ruleTarget?: WebhookTarget | null) {
-  const candidates = targetCandidates(productGame, priority, ruleTarget);
+export function eventTypeTarget(eventType: EventType): WebhookTarget | null {
+  if (eventType === "RESTOCK") return "RESTOCK";
+  if (eventType === "PRICE_DROP") return "PRICE_DROP";
+  if (eventType === "PREORDER_OPENED") return "PREORDER";
+  return null;
+}
 
-  for (const target of candidates) {
+export function routeCandidates(params: {
+  eventType: EventType;
+  productGame: Game;
+  priority?: AlertPriority | null;
+  storeWebhookId?: string | null;
+  ruleTarget?: WebhookTarget | null;
+  isTest?: boolean;
+  isError?: boolean;
+}): WebhookRouteCandidate[] {
+  const candidates: WebhookRouteCandidate[] = [];
+
+  if (params.isTest) addTarget(candidates, "TEST");
+  if (params.isError) addTarget(candidates, "ERROR_LOG");
+  if (params.priority === "HIGH" || params.priority === "CRITICAL") addTarget(candidates, "HIGH_PRIORITY");
+  if (params.storeWebhookId) candidates.push({ kind: "webhookId", webhookId: params.storeWebhookId });
+  addTarget(candidates, eventTypeTarget(params.eventType));
+  if (params.ruleTarget && params.ruleTarget !== "DEFAULT") addTarget(candidates, params.ruleTarget);
+  if (params.productGame === "POKEMON" || params.productGame === "BOTH") addTarget(candidates, "POKEMON");
+  if (params.productGame === "ONE_PIECE" || params.productGame === "BOTH") addTarget(candidates, "ONE_PIECE");
+  addTarget(candidates, "DEFAULT");
+
+  return candidates;
+}
+
+async function resolveWebhook(params: Parameters<typeof routeCandidates>[0]) {
+  const candidates = routeCandidates(params);
+
+  for (const candidate of candidates) {
+    if (candidate.kind === "webhookId") {
+      const webhook = await prisma.discordWebhook.findFirst({
+        where: { id: candidate.webhookId, active: true }
+      });
+      if (webhook) return webhook;
+      continue;
+    }
     const webhook = await prisma.discordWebhook.findFirst({
-      where: { target, active: true },
+      where: { target: candidate.target, active: true },
       orderBy: { updatedAt: "desc" }
     });
     if (webhook) return webhook;
@@ -129,7 +153,13 @@ export async function notifyProductEvent(eventId: string) {
   });
   const metadata = readMetadata(event);
   const cooldownSeconds = Number(metadata.matchedKeywordRuleCooldownSeconds ?? (await getGlobalCooldownSeconds()));
-  const webhook = await resolveWebhook(event.product.game, metadata.matchedKeywordRulePriority, metadata.matchedKeywordRuleWebhookTarget);
+  const webhook = await resolveWebhook({
+    eventType: event.type as EventType,
+    productGame: event.product.game,
+    priority: metadata.matchedKeywordRulePriority,
+    storeWebhookId: event.product.store.discordWebhookId,
+    ruleTarget: metadata.matchedKeywordRuleWebhookTarget
+  });
   const target = webhook?.target ?? metadata.matchedKeywordRuleWebhookTarget ?? "DEFAULT";
 
   const oldValue = event.oldValue && typeof event.oldValue === "object" && !Array.isArray(event.oldValue) ? event.oldValue : {};
@@ -211,8 +241,14 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
   });
   const webhook = requestedTarget
     ? await prisma.discordWebhook.findFirst({ where: { target: requestedTarget, active: true }, orderBy: { updatedAt: "desc" } })
-    : await resolveWebhook(product.game, "NORMAL", null);
-  const target = webhook?.target ?? requestedTarget ?? "DEFAULT";
+    : await resolveWebhook({
+        eventType: "NEW_PRODUCT",
+        productGame: product.game,
+        priority: "NORMAL",
+        storeWebhookId: product.store.discordWebhookId,
+        isTest: true
+      });
+  const target = webhook?.target ?? requestedTarget ?? "TEST";
   const payload = buildDiscordPayload({
     eventType: "NEW_PRODUCT",
     productTitle: product.title,

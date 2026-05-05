@@ -33,7 +33,22 @@ async function seedWebhooks() {
     ["seed-default-webhook", "Default placeholder webhook", "DEFAULT", process.env.DISCORD_DEFAULT_WEBHOOK_URL ?? "https://discord.com/api/webhooks/replace/default"],
     ["seed-pokemon-webhook", "Pokemon placeholder webhook", "POKEMON", process.env.DISCORD_POKEMON_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/pokemon"],
     ["seed-one-piece-webhook", "One Piece placeholder webhook", "ONE_PIECE", process.env.DISCORD_ONE_PIECE_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/one-piece"],
-    ["seed-error-webhook", "Error log placeholder webhook", "ERROR_LOG", process.env.DISCORD_ERROR_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/error"]
+    ["seed-high-priority-webhook", "high-priority", "HIGH_PRIORITY", process.env.DISCORD_HIGH_PRIORITY_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/high-priority"],
+    ["seed-error-webhook", "bot-errors", "ERROR_LOG", process.env.DISCORD_ERROR_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/error"],
+    ["seed-test-webhook", "test-alerty", "TEST", process.env.DISCORD_TEST_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/test-alerty"],
+    ["seed-restock-webhook", "RESTOCK events", "RESTOCK", process.env.DISCORD_RESTOCK_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/restock"],
+    ["seed-price-drop-webhook", "PRICE_DROP events", "PRICE_DROP", process.env.DISCORD_PRICE_DROP_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/price-drop"],
+    ["seed-preorder-webhook", "PREORDER events", "PREORDER", process.env.DISCORD_PREORDER_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/preorder"],
+    ["seed-cz-alza-webhook", "cz-alza", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-alza"],
+    ["seed-cz-dracik-webhook", "cz-dracik", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-dracik"],
+    ["seed-cz-smarty-webhook", "cz-smarty", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-smarty"],
+    ["seed-cz-pompo-webhook", "cz-pompo", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-pompo"],
+    ["seed-cz-cardstore-webhook", "cz-cardstore", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-cardstore"],
+    ["seed-cz-luxor-webhook", "cz-luxor", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-luxor"],
+    ["seed-cz-tolarie-webhook", "cz-tolarie", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-tolarie"],
+    ["seed-cz-knihy-dobrovsky-webhook", "cz-knihy-dobrovsky", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-knihy-dobrovsky"],
+    ["seed-pokemon-alerty-webhook", "pokemon-alerty", "POKEMON", process.env.DISCORD_POKEMON_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/pokemon-alerty"],
+    ["seed-one-piece-alerty-webhook", "one-piece-alerty", "ONE_PIECE", process.env.DISCORD_ONE_PIECE_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/one-piece-alerty"]
   ] as const;
 
   for (const [id, name, target, url] of webhooks) {
@@ -116,6 +131,7 @@ async function seedDemoData() {
     update: {
       name: "Demo Mock Store",
       active: false,
+      discordWebhookId: "seed-test-webhook",
       lastError: null,
       repeatedFailureCount: 0,
       autoPausedAfterFailures: false
@@ -131,6 +147,7 @@ async function seedDemoData() {
       country: "CZ",
       language: "en",
       active: false,
+      discordWebhookId: "seed-test-webhook",
       notes: "Disabled demo store using mocked monitor data."
     }
   });
@@ -140,6 +157,7 @@ async function seedDemoData() {
     update: {
       name: "Demo Watch Store",
       active: false,
+      discordWebhookId: "seed-cz-alza-webhook",
       lastError: "Demo HTML selector mismatch: price selector returned no value.",
       repeatedFailureCount: 2
     },
@@ -155,6 +173,7 @@ async function seedDemoData() {
       language: "en",
       active: false,
       trusted: true,
+      discordWebhookId: "seed-cz-alza-webhook",
       selectorProductUrl: ".product-card a",
       selectorTitle: ".product-title",
       selectorPrice: ".price",

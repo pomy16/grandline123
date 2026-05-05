@@ -182,6 +182,10 @@ Important variables:
 | `DISCORD_ONE_PIECE_WEBHOOK_URL` | No | seed/settings | Optional One Piece route placeholder. |
 | `DISCORD_HIGH_PRIORITY_WEBHOOK_URL` | No | seed/settings | Optional high-priority route placeholder. |
 | `DISCORD_ERROR_WEBHOOK_URL` | No | seed/settings | Optional error route placeholder. |
+| `DISCORD_TEST_WEBHOOK_URL` | No | seed/settings | Optional test alert route placeholder. |
+| `DISCORD_RESTOCK_WEBHOOK_URL` | No | seed/settings | Optional restock event route placeholder. |
+| `DISCORD_PRICE_DROP_WEBHOOK_URL` | No | seed/settings | Optional price-drop event route placeholder. |
+| `DISCORD_PREORDER_WEBHOOK_URL` | No | seed/settings | Optional preorder event route placeholder. |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes for web | web | Browser-visible API base URL. |
 | `DEFAULT_POLLING_INTERVAL_SECONDS` | No | API, worker, seed | Safer default polling interval. Minimum is 60 seconds. |
 | `NOTIFICATION_COOLDOWN_SECONDS` | No | API, worker, seed | Global notification cooldown default. |
@@ -249,6 +253,8 @@ Run API, worker, and frontend:
 npm run dev
 ```
 
+In local development the API and worker load the repository root `.env` automatically, so you do not need to manually `source .env`.
+
 Open:
 
 - Web: [http://localhost:3000](http://localhost:3000)
@@ -312,7 +318,7 @@ From the dashboard:
 
 1. Sign in at [http://localhost:3000/login](http://localhost:3000/login).
 2. Open Settings.
-3. Create a webhook with target `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, or `ERROR_LOG`.
+3. Create a webhook with target `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, `ERROR_LOG`, `TEST`, `RESTOCK`, `PRICE_DROP`, or `PREORDER`.
 4. Click `Test`.
 5. Check Logs -> Notification delivery.
 
@@ -329,10 +335,14 @@ The Discord embed includes product title, store, price, stock status, category, 
 
 When the worker creates a product event, it resolves a webhook in this order:
 
-1. `HIGH_PRIORITY`, when a matched rule has `HIGH` or `CRITICAL` priority.
-2. The matched keyword rule's explicit webhook target, when it is not `DEFAULT`.
-3. `POKEMON` or `ONE_PIECE`, based on the product game.
-4. `DEFAULT`.
+1. `TEST` when sending product test notifications.
+2. `ERROR_LOG` for system error delivery paths.
+3. `HIGH_PRIORITY`, when a matched rule has `HIGH` or `CRITICAL` priority.
+4. The store-specific webhook selected on the Store, when active.
+5. Event-type targets: `RESTOCK`, `PRICE_DROP`, or `PREORDER`.
+6. The matched keyword rule's explicit webhook target, when it is not `DEFAULT`.
+7. `POKEMON` or `ONE_PIECE`, based on the product game.
+8. `DEFAULT`.
 
 If no active webhook is found, the delivery is recorded as `SKIPPED`.
 
@@ -360,9 +370,12 @@ Stores support:
 - optional request headers
 - selectors for HTML mode
 - notes
+- optional store-specific Discord webhook
 - trusted store flag and public cart URL for purchase-assist mode
 
 Real `API`, `HTML`, `SITEMAP`, `RSS`, and optional `PLAYWRIGHT` adapters are available.
+
+Store-specific Discord webhooks are useful for personal channels such as `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, and `cz-knihy-dobrovsky`. Create or activate the webhook in Settings, then select it on the Store form.
 
 ## Configuring a Real Store Safely
 
@@ -515,7 +528,8 @@ npm run build
 
 - Add real webhook URLs only in Settings when you are ready to test delivery.
 - Webhook URLs are masked in the Settings list and redacted by structured logs.
-- Use separate targets for `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, and `ERROR_LOG` when useful.
+- Use separate targets for `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, `ERROR_LOG`, `TEST`, `RESTOCK`, `PRICE_DROP`, and `PREORDER` when useful.
+- Use store-specific webhook selection for personal store channels instead of creating public/community routing features.
 - Test delivery from Settings before activating broad alert rules.
 - Do not paste webhook URLs into scan logs, store notes, or issue reports.
 

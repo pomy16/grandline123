@@ -29,6 +29,8 @@ type StoreRecord = {
   trusted: boolean;
   notes?: string | null;
   publicCartUrl?: string | null;
+  discordWebhookId?: string | null;
+  discordWebhook?: DiscordWebhook | null;
   requestHeaders?: Record<string, string> | null;
   selectorProductUrl?: string | null;
   selectorTitle?: string | null;
@@ -43,6 +45,13 @@ type StoreRecord = {
   autoPausedAfterFailures: boolean;
   averageScanDurationMs?: number | null;
   _count?: { products: number; scanJobs?: number };
+};
+
+type DiscordWebhook = {
+  id: string;
+  name: string;
+  target: string;
+  active: boolean;
 };
 
 type ScanJob = {
@@ -76,6 +85,7 @@ const emptyForm = {
   active: false,
   trusted: false,
   publicCartUrl: "",
+  discordWebhookId: "",
   notes: "",
   requestHeaders: "{}",
   selectorProductUrl: "",
@@ -118,6 +128,7 @@ function storeStatus(store: StoreRecord) {
 
 export default function StoresPage() {
   const [stores, setStores] = useState<StoreRecord[]>([]);
+  const [webhooks, setWebhooks] = useState<DiscordWebhook[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState({ q: "", status: "", mode: "", sortBy: "createdAt", sortOrder: "desc", page: 1, pageSize: 20 });
@@ -174,9 +185,13 @@ export default function StoresPage() {
     setLoading(true);
     setError(null);
     try {
-      const payload = await apiFetch<{ data: StoreRecord[]; meta?: PageMeta }>(`/api/stores?${query}`);
+      const [payload, settingsPayload] = await Promise.all([
+        apiFetch<{ data: StoreRecord[]; meta?: PageMeta }>(`/api/stores?${query}`),
+        apiFetch<{ data: { webhooks: DiscordWebhook[] } }>("/api/settings")
+      ]);
       setStores(payload.data);
       setMeta(payload.meta ?? { ...defaultMeta, total: payload.data.length });
+      setWebhooks(settingsPayload.data.webhooks);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load stores.");
     } finally {
@@ -217,6 +232,7 @@ export default function StoresPage() {
       active: store.active,
       trusted: store.trusted,
       publicCartUrl: store.publicCartUrl ?? "",
+      discordWebhookId: store.discordWebhookId ?? "",
       notes: store.notes ?? "",
       requestHeaders: store.requestHeaders ? JSON.stringify(store.requestHeaders, null, 2) : "{}",
       selectorProductUrl: store.selectorProductUrl ?? "",
@@ -345,6 +361,15 @@ export default function StoresPage() {
                   <Input placeholder="Public cart URL" value={form.publicCartUrl} onChange={(event) => setForm({ ...form, publicCartUrl: event.target.value })} />
                   <FieldError message={formErrors.publicCartUrl} />
                 </div>
+                <Select value={form.discordWebhookId} onChange={(event) => setForm({ ...form, discordWebhookId: event.target.value })}>
+                  <option value="">No store-specific Discord webhook</option>
+                  {webhooks.map((webhook) => (
+                    <option key={webhook.id} value={webhook.id}>
+                      {webhook.name} ({webhook.target}{webhook.active ? "" : ", paused"})
+                    </option>
+                  ))}
+                </Select>
+                <div className="text-xs text-muted-foreground">Purchase assist only: alerts can route to this store webhook, but checkout remains manual.</div>
                 <div>
                   <Textarea
                     className="min-h-20 font-mono"
@@ -437,13 +462,14 @@ export default function StoresPage() {
                               ["active", "Status"],
                               ["lastScanAt", "Last scan"],
                               ["nextScanAt", "Next scan"],
+                              ["webhook", "Webhook"],
                               ["repeatedFailureCount", "Last error"],
                               ["products", "Products"]
                             ].map(([field, label]) => (
                               <th key={field} className="py-3 pr-4 font-medium">
-                                <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => field !== "products" && toggleSort(field)} disabled={field === "products"}>
+                                <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => !["products", "webhook"].includes(field) && toggleSort(field)} disabled={["products", "webhook"].includes(field)}>
                                   {label}
-                                  {field !== "products" ? <ArrowDownUp size={13} aria-hidden /> : null}
+                                  {!["products", "webhook"].includes(field) ? <ArrowDownUp size={13} aria-hidden /> : null}
                                 </button>
                               </th>
                             ))}
@@ -473,6 +499,16 @@ export default function StoresPage() {
                                 </td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.lastScanAt)}</td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.nextScanAt)}</td>
+                                <td className="py-3 pr-4">
+                                  {store.discordWebhook ? (
+                                    <div className="space-y-1">
+                                      <div className="font-medium">{store.discordWebhook.name}</div>
+                                      <Badge tone={store.discordWebhook.active ? "info" : "default"}>{store.discordWebhook.active ? store.discordWebhook.target : "Paused webhook"}</Badge>
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground">Fallback routing</span>
+                                  )}
+                                </td>
                                 <td className="max-w-72 py-3 pr-4">
                                   {store.lastError ? (
                                     <div className="space-y-2">
