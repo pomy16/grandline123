@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createHash, randomBytes, scryptSync } from "node:crypto";
+import { CZ_STORE_PRESETS, buildStorePresetNotes, resolvePresetWebhookId } from "../packages/shared/src/cz-store-presets";
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,10 @@ function hashPassword(password: string): string {
 
 function demoHash(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function placeholderWebhookUrl(name: string) {
+  return `https://example.invalid/discord-webhook-placeholder/${name}`;
 }
 
 async function seedAdmin() {
@@ -30,34 +35,45 @@ async function seedAdmin() {
 
 async function seedWebhooks() {
   const webhooks = [
-    ["seed-default-webhook", "Default placeholder webhook", "DEFAULT", process.env.DISCORD_DEFAULT_WEBHOOK_URL ?? "https://discord.com/api/webhooks/replace/default"],
-    ["seed-pokemon-webhook", "Pokemon placeholder webhook", "POKEMON", process.env.DISCORD_POKEMON_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/pokemon"],
-    ["seed-one-piece-webhook", "One Piece placeholder webhook", "ONE_PIECE", process.env.DISCORD_ONE_PIECE_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/one-piece"],
-    ["seed-high-priority-webhook", "high-priority", "HIGH_PRIORITY", process.env.DISCORD_HIGH_PRIORITY_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/high-priority"],
-    ["seed-error-webhook", "bot-errors", "ERROR_LOG", process.env.DISCORD_ERROR_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/error"],
-    ["seed-test-webhook", "test-alerty", "TEST", process.env.DISCORD_TEST_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/test-alerty"],
-    ["seed-restock-webhook", "RESTOCK events", "RESTOCK", process.env.DISCORD_RESTOCK_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/restock"],
-    ["seed-price-drop-webhook", "PRICE_DROP events", "PRICE_DROP", process.env.DISCORD_PRICE_DROP_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/price-drop"],
-    ["seed-preorder-webhook", "PREORDER events", "PREORDER", process.env.DISCORD_PREORDER_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/preorder"],
-    ["seed-cz-alza-webhook", "cz-alza", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-alza"],
-    ["seed-cz-dracik-webhook", "cz-dracik", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-dracik"],
-    ["seed-cz-smarty-webhook", "cz-smarty", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-smarty"],
-    ["seed-cz-pompo-webhook", "cz-pompo", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-pompo"],
-    ["seed-cz-cardstore-webhook", "cz-cardstore", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-cardstore"],
-    ["seed-cz-luxor-webhook", "cz-luxor", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-luxor"],
-    ["seed-cz-tolarie-webhook", "cz-tolarie", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-tolarie"],
-    ["seed-cz-knihy-dobrovsky-webhook", "cz-knihy-dobrovsky", "DEFAULT", "https://discord.com/api/webhooks/replace/cz-knihy-dobrovsky"],
-    ["seed-pokemon-alerty-webhook", "pokemon-alerty", "POKEMON", process.env.DISCORD_POKEMON_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/pokemon-alerty"],
-    ["seed-one-piece-alerty-webhook", "one-piece-alerty", "ONE_PIECE", process.env.DISCORD_ONE_PIECE_WEBHOOK_URL || "https://discord.com/api/webhooks/replace/one-piece-alerty"]
+    ["seed-default-webhook", "Default placeholder webhook", "DEFAULT", process.env.DISCORD_DEFAULT_WEBHOOK_URL ?? placeholderWebhookUrl("default")],
+    ["seed-pokemon-webhook", "pokemon-alerty", "POKEMON", process.env.DISCORD_POKEMON_WEBHOOK_URL || placeholderWebhookUrl("pokemon-alerty")],
+    ["seed-one-piece-webhook", "one-piece-alerty", "ONE_PIECE", process.env.DISCORD_ONE_PIECE_WEBHOOK_URL || placeholderWebhookUrl("one-piece-alerty")],
+    ["seed-high-priority-webhook", "high-priority", "HIGH_PRIORITY", process.env.DISCORD_HIGH_PRIORITY_WEBHOOK_URL || placeholderWebhookUrl("high-priority")],
+    ["seed-error-webhook", "bot-errors", "ERROR_LOG", process.env.DISCORD_ERROR_WEBHOOK_URL || placeholderWebhookUrl("bot-errors")],
+    ["seed-test-webhook", "test-alerty", "TEST", process.env.DISCORD_TEST_WEBHOOK_URL || placeholderWebhookUrl("test-alerty")],
+    ["seed-restock-webhook", "RESTOCK events", "RESTOCK", process.env.DISCORD_RESTOCK_WEBHOOK_URL || placeholderWebhookUrl("restock")],
+    ["seed-price-drop-webhook", "PRICE_DROP events", "PRICE_DROP", process.env.DISCORD_PRICE_DROP_WEBHOOK_URL || placeholderWebhookUrl("price-drop")],
+    ["seed-preorder-webhook", "PREORDER events", "PREORDER", process.env.DISCORD_PREORDER_WEBHOOK_URL || placeholderWebhookUrl("preorder")]
   ] as const;
 
   for (const [id, name, target, url] of webhooks) {
+    const existingByName = await prisma.discordWebhook.findFirst({ where: { name }, orderBy: { updatedAt: "desc" } });
+    if (existingByName) {
+      await prisma.discordWebhook.update({
+        where: { id: existingByName.id },
+        data: { target, active: existingByName.active }
+      });
+      continue;
+    }
+
     await prisma.discordWebhook.upsert({
       where: { id },
       update: { name, target, active: false },
       create: { id, name, target, url, active: false }
     });
   }
+}
+
+async function webhookIdsByName(names: string[]) {
+  const webhooks = await prisma.discordWebhook.findMany({
+    where: { name: { in: names } },
+    orderBy: [{ active: "desc" }, { updatedAt: "desc" }]
+  });
+  const ids = new Map<string, string>();
+  for (const webhook of webhooks) {
+    if (!ids.has(webhook.name)) ids.set(webhook.name, webhook.id);
+  }
+  return ids;
 }
 
 async function seedRules() {
@@ -126,6 +142,7 @@ async function seedRules() {
 }
 
 async function seedDemoData() {
+  const demoWatchWebhookId = resolvePresetWebhookId({ webhookName: "cz-alza" }, await webhookIdsByName(["cz-alza"]));
   const mockStore = await prisma.store.upsert({
     where: { id: "seed-mock-store" },
     update: {
@@ -157,7 +174,7 @@ async function seedDemoData() {
     update: {
       name: "Demo Watch Store",
       active: false,
-      discordWebhookId: "seed-cz-alza-webhook",
+      discordWebhookId: demoWatchWebhookId,
       lastError: "Demo HTML selector mismatch: price selector returned no value.",
       repeatedFailureCount: 2
     },
@@ -173,7 +190,7 @@ async function seedDemoData() {
       language: "en",
       active: false,
       trusted: true,
-      discordWebhookId: "seed-cz-alza-webhook",
+      discordWebhookId: demoWatchWebhookId,
       selectorProductUrl: ".product-card a",
       selectorTitle: ".product-title",
       selectorPrice: ".price",
@@ -307,6 +324,39 @@ async function seedDemoData() {
   });
 }
 
+async function seedCzechStorePresets() {
+  const webhookIds = await webhookIdsByName([...new Set(CZ_STORE_PRESETS.map((preset) => preset.webhookName))]);
+
+  for (const preset of CZ_STORE_PRESETS) {
+    const discordWebhookId = resolvePresetWebhookId(preset, webhookIds);
+    const notes = buildStorePresetNotes(preset, Boolean(discordWebhookId));
+    const data = {
+      name: preset.name,
+      baseUrl: preset.baseUrl,
+      listingUrls: preset.listingUrls,
+      apiEndpoint: null,
+      mode: preset.mode,
+      pollingIntervalSeconds: preset.pollingIntervalSeconds,
+      currency: preset.currency,
+      country: preset.country,
+      language: preset.language,
+      trusted: preset.trusted,
+      discordWebhookId,
+      notes
+    };
+
+    await prisma.store.upsert({
+      where: { id: preset.id },
+      update: data,
+      create: {
+        id: preset.id,
+        ...data,
+        active: false
+      }
+    });
+  }
+}
+
 async function seedSettings() {
   await prisma.appSetting.createMany({
     skipDuplicates: true,
@@ -324,6 +374,7 @@ async function main() {
   await seedWebhooks();
   await seedRules();
   await seedDemoData();
+  await seedCzechStorePresets();
   await seedSettings();
 }
 
