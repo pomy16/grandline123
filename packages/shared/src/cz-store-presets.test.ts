@@ -11,9 +11,14 @@ describe("Czech store presets", () => {
       "cz-cardstore",
       "cz-luxor",
       "cz-tolarie",
-      "cz-knihy-dobrovsky"
+      "cz-knihy-dobrovsky",
+      "cz-vesely-drak",
+      "cz-tcgkarty",
+      "cz-gengar",
+      "cz-hranane-tu"
     ]);
     expect(new Set(CZ_STORE_PRESETS.map((preset) => preset.id)).size).toBe(CZ_STORE_PRESETS.length);
+    expect(new Set(CZ_STORE_PRESETS.map((preset) => preset.slug)).size).toBe(CZ_STORE_PRESETS.length);
   });
 
   it("keeps all real store presets paused and safely spaced by default", () => {
@@ -37,12 +42,31 @@ describe("Czech store presets", () => {
       "cz-cardstore": 180,
       "cz-luxor": 180,
       "cz-tolarie": 180,
-      "cz-knihy-dobrovsky": 300
+      "cz-knihy-dobrovsky": 300,
+      "cz-vesely-drak": 180,
+      "cz-tcgkarty": 180,
+      "cz-gengar": 180,
+      "cz-hranane-tu": 300
     });
   });
 
   it("does not contain Discord webhook URLs or secrets", () => {
     expect(JSON.stringify(CZ_STORE_PRESETS)).not.toMatch(/discord(?:app)?\.com\/api\/webhooks/i);
+  });
+
+  it("uses safe public preset URLs without cart or checkout paths", () => {
+    for (const preset of CZ_STORE_PRESETS) {
+      expect(preset.listingUrls.length).toBeGreaterThan(0);
+      expect(preset.listingUrls.every((url) => url.startsWith("https://"))).toBe(true);
+      expect(preset.listingUrls.join(" ")).not.toMatch(/basket|cart|checkout|add-to-cart|objednavka|kosik|košík/i);
+    }
+  });
+
+  it("keeps the new Phase 10 stores paused by default", () => {
+    const newStores = CZ_STORE_PRESETS.filter((preset) => ["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu"].includes(preset.slug));
+    expect(newStores).toHaveLength(4);
+    expect(newStores.every((preset) => preset.active === false && preset.recommended === false)).toBe(true);
+    expect(newStores.map((preset) => preset.webhookName)).toEqual(["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu"]);
   });
 
   it("assigns store webhooks by webhook record name", () => {
