@@ -215,6 +215,7 @@ export async function notifyProductEvent(eventId: string) {
   const delivery = await sendWebhook({
     webhookUrl: webhook.url,
     target: webhook.target,
+    webhookName: webhook.name,
     eventId: event.id,
     productId: event.productId,
     payload,
@@ -281,6 +282,7 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
   return sendWebhook({
     webhookUrl: webhook.url,
     target: webhook.target,
+    webhookName: webhook.name,
     productId: product.id,
     payload
   });

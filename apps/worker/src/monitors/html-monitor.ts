@@ -12,32 +12,39 @@ import {
   normalizeStockStatus,
   uniqueProducts,
   isPurchaseAssistUrl,
-  isValidProductUrl
+  isValidProductUrl,
+  meaningfulProductTitle,
+  hasStrongProductSignal
 } from "./parser-utils";
 
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
   const title = selectorText(html, storeConfig.selectors?.title) ?? selectorText(html, "h1");
   const href = selectorHref(html, storeConfig.selectors?.productUrl);
-  if (!title || normalizeTitle(title) === normalizeTitle(storeConfig.name) || !isValidProductUrl(href, storeConfig)) return null;
+  if (!title) return null;
+  if (!meaningfulProductTitle(title, storeConfig) || normalizeTitle(title) === normalizeTitle(storeConfig.name) || !isValidProductUrl(href, storeConfig)) return null;
+  const productTitle = title;
   const priceText = selectorText(html, storeConfig.selectors?.price);
   const stockText = [selectorText(html, storeConfig.selectors?.stockStatus), selectorText(html, storeConfig.selectors?.preorderStatus)].filter(Boolean).join(" ");
   const stock = normalizeStockStatus(stockText);
   const canonicalUrl = normalizeUrl(href, storeConfig.baseUrl);
+  const imageUrl = selectorImage(html, storeConfig.selectors?.image);
+  const price = priceText ? parsePrice(priceText) : null;
+  if (!hasStrongProductSignal({ url: canonicalUrl, storeConfig, price, imageUrl })) return null;
 
   return {
-    title,
-    normalizedTitle: normalizeTitle(title),
+    title: productTitle,
+    normalizedTitle: normalizeTitle(productTitle),
     url: canonicalUrl,
     canonicalUrl,
-    imageUrl: selectorImage(html, storeConfig.selectors?.image),
+    imageUrl,
     publicCartUrl: publicCartLink(html, storeConfig),
-    price: priceText ? parsePrice(priceText) : null,
+    price,
     currency: storeConfig.currency,
     ...stock,
     sku: null,
     ean: null,
     category: null,
-    game: inferGame(title),
+    game: inferGame(productTitle),
     rawData: { source: "html-monitor", pageUrl, parser: "selectors" }
   };
 }
@@ -81,8 +88,10 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
 
     const imageTag = tag.match(/<img\b[^>]*>/i)?.[0] ?? "";
     const title = stripHtml(tag) || attrValue(imageTag, "alt") || attrValue(imageTag, "title");
-    if (!title || normalizeTitle(title).length < 4 || normalizeTitle(title) === normalizeTitle(storeConfig.name)) continue;
-    if (inferGame(title) === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${title} ${href}`)) continue;
+    if (!title) continue;
+    if (!meaningfulProductTitle(title, storeConfig) || normalizeTitle(title).length < 4 || normalizeTitle(title) === normalizeTitle(storeConfig.name)) continue;
+    const productTitle = title;
+    if (inferGame(productTitle) === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${productTitle} ${href}`)) continue;
 
     const localHtml = html.slice(Math.max(match.index - 600, 0), Math.min(match.index + tag.length + 900, html.length));
     const priceText =
@@ -91,21 +100,25 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
       null;
     const stock = normalizeStockStatus(localHtml);
     const canonicalUrl = normalizeUrl(href, storeConfig.baseUrl);
+    const imageUrl = attrValue(imageTag, "src") ?? attrValue(imageTag, "data-src") ?? attrValue(imageTag, "data-original");
+    const price = priceText ? parsePrice(priceText) : null;
+    const productCard = /(?:class|data-testid|itemtype)=["'][^"']*(?:product|produkt|item|card|box)/i.test(localHtml) || /<article\b/i.test(localHtml);
+    if (!hasStrongProductSignal({ url: canonicalUrl, storeConfig, price, imageUrl, productCard })) continue;
 
     products.push({
-      title,
-      normalizedTitle: normalizeTitle(title),
+      title: productTitle,
+      normalizedTitle: normalizeTitle(productTitle),
       url: canonicalUrl,
       canonicalUrl,
-      imageUrl: attrValue(imageTag, "src") ?? attrValue(imageTag, "data-src") ?? attrValue(imageTag, "data-original"),
+      imageUrl,
       publicCartUrl: publicCartLink(localHtml, storeConfig),
-      price: priceText ? parsePrice(priceText) : null,
+      price,
       currency: storeConfig.currency,
       ...stock,
       sku: null,
       ean: null,
       category: null,
-      game: inferGame(title),
+      game: inferGame(productTitle),
       rawData: { source, pageUrl, parser: "product-card" }
     });
   }
