@@ -116,6 +116,25 @@ describe("product parser normalization", () => {
     }
   });
 
+  it("rejects article, guide, and external profile URLs as products", () => {
+    const tcgKarty = { ...store, name: "TCG Karty", baseUrl: "https://www.tcgkarty.cz", listingUrls: ["https://www.tcgkarty.cz/"] };
+
+    expect(
+      productFromUnknown(
+        { "@type": "Product", name: "Jak začít sbírat Yu-Gi-Oh! karty v Česku", url: "/jak-zacit-sbirat-yu-gi-oh-karty-v-cesku", image: "/guide.jpg" },
+        tcgKarty,
+        "playwright-monitor"
+      )
+    ).toBeNull();
+    expect(
+      productFromUnknown(
+        { "@type": "Product", name: "Tcgkarty.cz na Firmy.cz", url: "https://www.firmy.cz/detail/13583070-tcgkarty-cz-hradec-kralove.html", image: "/profile.jpg" },
+        tcgKarty,
+        "playwright-monitor"
+      )
+    ).toBeNull();
+  });
+
   it("can find a public cart shortcut without treating it as a product link", () => {
     const html = '<a href="/pokemon-booster">Pokemon Booster</a><a href="/basket/add/?product_id=64044">Do kosiku</a>';
 

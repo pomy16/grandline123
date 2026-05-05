@@ -120,14 +120,83 @@ export function inferGame(title: string): Game {
   return "UNKNOWN";
 }
 
+export function isNonProductContentTitle(title: string): boolean {
+  const normalized = normalizeTitle(title);
+  if (!normalized) return true;
+  if (/^(bestseller|na prodejne|nedostupne|skladem|vyprodano|predobjednavka|novinka|akce|tip)$/.test(normalized)) return true;
+  if (/^(nacist dalsich|nacist dalsi|dalsi|vice|zobrazit dalsi)(\s+\d+)?$/.test(normalized)) return true;
+  if (/^(proc nakupovat u nas|jak nakupovat|obchodni podminky|ochrana osobnich udaju|cookie lista)$/.test(normalized)) return true;
+  if (/^jak (zacit|poznat|vybrat|sbirat)\b/.test(normalized)) return true;
+  if (/\bna firmy cz$/.test(normalized)) return true;
+  if (/\b(firmy cz|zbozi cz|heureka|newsletter|registrace|remarketing)\b/.test(normalized)) return true;
+  return false;
+}
+
 export function isLikelyAccessoryProduct(title: string): boolean {
   const normalized = normalizeTitle(title);
+  const sealedBoxException =
+    /\b(booster box|elite trainer box|trainer box|ex box|collection box|ultra premium collection|premium collection|poster collection|pin collection)\b/.test(normalized);
+  const sealedTinException = /\b(mini tin|poke ball tin|pokeball tin|pokeball|tin)\b/.test(normalized);
+  if (sealedBoxException || sealedTinException) return false;
+
   const accessoryPatterns = [
-    /\bultra pro\b.*\b(deck protector|deck box|pro binder|album|obaly|krabicka|krabicka|krouzkove album|flip box)\b/,
-    /\b(deck protector|deck box|pro binder|card sleeves|sleeves|obaly na karty|obaly|album na|krouzkove album|krabicka na karty|krabicka na karty|toploader|top loader|playmat|podlozka|folie|folia)\b/,
-    /\b(a4 album|a5 album|portfolio|binder album)\b/
+    /\bultra pro\b.*\b(deck protector|deck box|pro binder|album|obaly|krabicka|krouzkove album|flip box|toploader|podlozka)\b/,
+    /\b(deck protector|deck box|flip box|card sleeves|sleeves|obaly na karty|obaly|album na|krouzkove album|krabicka na karty|box na karty|toploader|top loader|playmat|hraci podlozka|podlozka|folie|folia)\b/,
+    /\b(a4 album|a5 album|portfolio|folio|binder album|pro binder|binder|poradac)\b/,
+    /\b(figurka|bojova figurka|figure|hracka|darek|darky|plysak|puzzle|plakat|samolepky|prislusenstvi)\b/,
+    /\b(plastovy toploader|casual album|prime album|sbiraci album|sberatelske album)\b/
   ];
   return accessoryPatterns.some((pattern) => pattern.test(normalized));
+}
+
+export function isLikelySealedTcgProductTitle(title: string): boolean {
+  const normalized = normalizeTitle(title);
+  if (!normalized || isNonProductContentTitle(title) || isLikelyAccessoryProduct(title)) return false;
+
+  const tcgContext =
+    /\b(pokemon|pokémon|poke|one piece|tcg|card game|pokemon karty|pokemon karet|op\b|sv\d|me\d)\b/.test(normalized);
+  if (!tcgContext) return false;
+
+  const sealedPatterns = [
+    /\bbooster\b/,
+    /\bbooster box\b/,
+    /\bbooster bundle\b/,
+    /\bbooster display\b/,
+    /\benhanced booster display\b/,
+    /\bdisplay\b/,
+    /\betb\b/,
+    /\belite trainer box\b/,
+    /\btrainer box\b/,
+    /\bblister\b/,
+    /\b2 pack blister\b/,
+    /\bmini tin\b/,
+    /\btin\b/,
+    /\bpoke ball tin\b/,
+    /\bpokeball tin\b/,
+    /\bpoke ball\b/,
+    /\bpokeball\b/,
+    /\bpremium collection\b/,
+    /\bultra premium collection\b/,
+    /\bposter collection\b/,
+    /\bpin collection\b/,
+    /\bcollection\b/,
+    /\bstarter ?deck\b/,
+    /\bleague battle deck\b/,
+    /\bbattle deck\b/,
+    /\bbuild battle\b/,
+    /\bbuild and battle\b/,
+    /\bcard game\b/,
+    /\badventni kalendar\b/,
+    /\bholiday calendar\b/
+  ];
+
+  return sealedPatterns.some((pattern) => pattern.test(normalized));
+}
+
+export function isRelevantTargetProduct(product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "game" | "category">): boolean {
+  if (isNonProductContentTitle(product.title)) return false;
+  if (isLikelyAccessoryProduct(product.title)) return false;
+  return isLikelySealedTcgProductTitle(product.title);
 }
 
 export function productIdentityKey(input: Pick<NormalizedProduct, "canonicalUrl" | "normalizedTitle" | "sku" | "ean">, storeId: string): string {
@@ -157,7 +226,7 @@ function fuzzyIncludes(haystack: string, needle: string): boolean {
 }
 
 export function keywordRuleMatchesProduct(rule: KeywordRuleInput, product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "price" | "game">): boolean {
-  if (isLikelyAccessoryProduct(product.title)) {
+  if (!isLikelySealedTcgProductTitle(product.title)) {
     return false;
   }
 

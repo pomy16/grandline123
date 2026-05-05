@@ -1,5 +1,5 @@
 import type { NormalizedProduct, StockStatus, StoreConfig } from "@tcg-monitor/shared";
-import { inferGame, normalizeTitle, normalizeUrl, parsePrice } from "@tcg-monitor/shared";
+import { inferGame, isNonProductContentTitle, normalizeTitle, normalizeUrl, parsePrice } from "@tcg-monitor/shared";
 
 export function decodeEntities(value: string) {
   return value
@@ -75,6 +75,8 @@ export function isValidSourceCandidateUrl(url: string | null, storeConfig: Store
   if (isPurchaseAssistUrl(url, storeConfig.baseUrl)) return false;
   try {
     const parsed = new URL(url, storeConfig.baseUrl);
+    const base = new URL(storeConfig.baseUrl);
+    if (parsed.origin !== base.origin) return false;
     return ["http:", "https:"].includes(parsed.protocol);
   } catch {
     return false;
@@ -93,6 +95,7 @@ export function isProductControlTitle(title: string | null): boolean {
   if (!title) return true;
   const normalized = normalizeTitle(title);
   if (!normalized) return true;
+  if (isNonProductContentTitle(title)) return true;
   if (/^(nacist dalsich|nacist dalsi|dalsi|vice|zobrazit dalsi)(\s+\d+)?$/.test(normalized)) return true;
   return [
     "nedostupne",
@@ -107,7 +110,10 @@ export function isProductControlTitle(title: string | null): boolean {
     "na prodejne",
     "novinka",
     "akce",
-    "tip"
+    "tip",
+    "proc nakupovat u nas",
+    "jak poznat falesne karty",
+    "sberatelske karty"
   ].includes(normalized);
 }
 
@@ -127,6 +133,8 @@ export function hasProductDetailUrlPattern(url: string | null, storeConfig: Stor
   try {
     const parsed = new URL(url, storeConfig.baseUrl);
     const path = normalizePathForSafety(parsed.pathname);
+    const base = new URL(storeConfig.baseUrl);
+    if (parsed.origin !== base.origin) return false;
     if (/\/hra\//.test(path)) return true;
     if (/(?:^|[-/])\d{3,}(?:[-/]|$)/.test(path)) return true;
     return /\/(?:produkt|product|detail|zbozi|item|karta|single)\//.test(path);
@@ -141,15 +149,19 @@ export function isLikelySourcePageUrl(url: string | null, storeConfig: StoreConf
   try {
     const canonical = normalizeUrl(url, storeConfig.baseUrl);
     const parsed = new URL(canonical);
+    const base = new URL(storeConfig.baseUrl);
     const path = normalizePathForSafety(parsed.pathname).replace(/\/+$/, "");
     const segments = path.split("/").filter(Boolean);
+    if (parsed.origin !== base.origin) return true;
+    if (/firmy\.cz$/i.test(parsed.hostname)) return true;
     if (isGenericProductUrl(canonical, storeConfig)) return true;
     if (segments.length === 0) return true;
-    if (/\/(?:publisher|nakladatel|category|kategorie|katalog|search|vyhledavani|strana|page)(?:\/|$)/.test(`${path}/`)) return true;
+    if (/\/(?:publisher|nakladatel|category|kategorie|katalog|search|vyhledavani|strana|page|blog|clanek|article|magazin|navod|guide|poradna|jak-nakupovat|osobni-udaje)(?:\/|$)/.test(`${path}/`)) return true;
+    if (/(^|\/)(jak-|proc-|ochrana-|obchodni-podminky|cookie|kontakt|reklamace|doprava|platba)/.test(path)) return true;
     if (/load-more|loadmore|nacist|dalsi|pagination|ajax/.test(path)) return true;
     if (["pokemon-tcg", "pokemon", "booster", "boostery", "konverzacni-karty", "one-piece", "one-piece-card-game"].includes(segments.join("/"))) return true;
     for (const key of parsed.searchParams.keys()) {
-      if (/^(page|p|sort|filter|q|s|search|category|manufacturer|publisher|limit|offset)$/i.test(key)) return true;
+      if (/^(page|p|sort|filter|q|s|search|category|manufacturer|publisher|limit|offset|country_id|do)$/i.test(key)) return true;
     }
     return false;
   } catch {

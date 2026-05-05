@@ -37,11 +37,24 @@ const sealedExcludeKeywords = [
   "pro-binder",
   "kroužkové album",
   "krabička na karty",
+  "box na karty",
+  "portfolio",
+  "binder",
   "folie",
   "fólie",
   "toploader",
+  "top loader",
   "playmat",
-  "podložka"
+  "podložka",
+  "hrací podložka",
+  "figurka",
+  "bojová figurka",
+  "hračka",
+  "plyšák",
+  "puzzle",
+  "plakát",
+  "samolepky",
+  "příslušenství"
 ];
 
 async function seedAdmin() {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedProduct } from "@tcg-monitor/shared";
-import { detectEvents, mergeIncomingWithExisting, stateHash } from "./scanner";
+import { detectEvents, filterRelevantScanProducts, mergeIncomingWithExisting, stateHash } from "./scanner";
 
 const incoming: NormalizedProduct = {
   title: "Pokemon TCG Booster Box",
@@ -65,5 +65,34 @@ describe("scan event generation", () => {
       category: "Sealed",
       game: "POKEMON"
     });
+  });
+
+  it("filters non-target products before persistence, events, and Discord alerts", () => {
+    const products = [
+      incoming,
+      {
+        ...incoming,
+        title: "Pokémon Hrací podložka - Frosted Forest",
+        normalizedTitle: "pokemon hraci podlozka frosted forest",
+        canonicalUrl: "https://example.com/hraci-podlozka",
+        url: "https://example.com/hraci-podlozka"
+      },
+      {
+        ...incoming,
+        title: "Jak začít sbírat Yu-Gi-Oh! karty v Česku",
+        normalizedTitle: "jak zacit sbirat yu gi oh karty v cesku",
+        canonicalUrl: "https://example.com/jak-zacit",
+        url: "https://example.com/jak-zacit",
+        game: "UNKNOWN" as const
+      }
+    ];
+
+    const filtered = filterRelevantScanProducts(products);
+
+    expect(filtered.accepted.map((product) => product.title)).toEqual(["Pokemon TCG Booster Box"]);
+    expect(filtered.skipped.map((product) => product.title)).toEqual([
+      "Pokémon Hrací podložka - Frosted Forest",
+      "Jak začít sbírat Yu-Gi-Oh! karty v Česku"
+    ]);
   });
 });

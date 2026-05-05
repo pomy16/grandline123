@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { keywordRuleMatchesProduct } from "@tcg-monitor/shared";
+import { isRelevantTargetProduct, keywordRuleMatchesProduct } from "@tcg-monitor/shared";
 import type { EventType, NormalizedProduct } from "@tcg-monitor/shared";
 import { Prisma } from "@prisma/client";
 import type { Product, Store } from "@prisma/client";
@@ -231,6 +231,28 @@ async function applyKeywordRules(products: NormalizedProduct[]) {
   });
 }
 
+function productRelevanceReason(product: NormalizedProduct) {
+  if (!product.title.trim()) return "missing title";
+  if (!isRelevantTargetProduct(product)) return "not a relevant sealed TCG target";
+  return null;
+}
+
+export function filterRelevantScanProducts(products: NormalizedProduct[]) {
+  const accepted: NormalizedProduct[] = [];
+  const skipped: Array<{ title: string; url: string; reason: string }> = [];
+
+  for (const product of products) {
+    const reason = productRelevanceReason(product);
+    if (reason) {
+      skipped.push({ title: product.title, url: product.canonicalUrl, reason });
+      continue;
+    }
+    accepted.push(product);
+  }
+
+  return { accepted, skipped };
+}
+
 function monitorErrorContext(error: unknown) {
   if (error instanceof MonitorRequestError) {
     return {
@@ -260,7 +282,9 @@ export async function scanStore(storeId: string, scanJobId?: string) {
 
   try {
     const monitor = createMonitor(store.mode);
-    const products = await applyKeywordRules(await monitor.scan(toStoreConfig(store)));
+    const rawProducts = await monitor.scan(toStoreConfig(store));
+    const relevance = filterRelevantScanProducts(rawProducts);
+    const products = await applyKeywordRules(relevance.accepted);
     assertNoMockProductsForRealStore(store, products);
     const parserWarnings = "warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.slice(0, 20) : [];
     let eventsCreated = 0;
@@ -274,8 +298,11 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           mode: store.mode,
           monitorMode: store.mode,
           fallbackUsed: false,
+          rawProductCount: rawProducts.length,
           productCount: products.length,
           productsExtracted: products.length,
+          skippedNonTargetCount: relevance.skipped.length,
+          skippedNonTargetProducts: relevance.skipped.slice(0, 20),
           products: products.slice(0, 10).map((product) => ({
             title: product.title,
             url: product.canonicalUrl,
@@ -298,6 +325,22 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           severity: "WARN",
           message: `${store.mode} parser skipped non-product URLs for ${store.name}.`,
           context: { mode: store.mode, monitorMode: store.mode, parserWarnings } as Prisma.InputJsonValue
+        }
+      });
+    }
+
+    if (relevance.skipped.length > 0) {
+      await prisma.scanLog.create({
+        data: {
+          storeId: store.id,
+          severity: "WARN",
+          message: `${store.mode} monitor skipped non-target products for ${store.name}.`,
+          context: {
+            mode: store.mode,
+            monitorMode: store.mode,
+            skippedNonTargetCount: relevance.skipped.length,
+            skippedNonTargetProducts: relevance.skipped.slice(0, 50)
+          } as Prisma.InputJsonValue
         }
       });
     }
@@ -333,7 +376,17 @@ export async function scanStore(storeId: string, scanJobId?: string) {
         storeId: store.id,
         severity: "INFO",
         message: `${store.mode} scan completed for ${store.name}.`,
-        context: { mode: store.mode, monitorMode: store.mode, fallbackUsed: false, productsFound: products.length, productsExtracted: products.length, eventsCreated, durationMs }
+        context: {
+          mode: store.mode,
+          monitorMode: store.mode,
+          fallbackUsed: false,
+          rawProductCount: rawProducts.length,
+          skippedNonTargetCount: relevance.skipped.length,
+          productsFound: products.length,
+          productsExtracted: products.length,
+          eventsCreated,
+          durationMs
+        }
       }
     });
 
