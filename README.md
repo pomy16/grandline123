@@ -221,7 +221,7 @@ Important variables:
 | --- | --- | --- | --- |
 | `NODE_ENV` | No | all | `development`, `test`, or `production`. Production enables stricter validation. |
 | `API_PORT` | No | API | API listen port. Defaults to `4000`. |
-| `WEB_PORT` | No | web | Next.js listen port. Defaults to `3000`. |
+| `WEB_PORT` | No | web | Next.js local development listen port. Defaults to `3001` for `npm run dev -w @tcg-monitor/web`. |
 | `DATABASE_URL` | Yes | API, worker, Prisma | PostgreSQL connection string. |
 | `REDIS_URL` | Yes in production | API, worker | Redis connection string for BullMQ. Defaults to local Redis in development. |
 | `JWT_SECRET` | Yes | API | Session signing secret. Must be long and changed from the default in production. |
@@ -317,7 +317,7 @@ In local development the API and worker load the repository root `.env` automati
 
 Open:
 
-- Web: [http://localhost:3000](http://localhost:3000)
+- Web: [http://localhost:3001](http://localhost:3001)
 - API health: [http://localhost:4000/health](http://localhost:4000/health)
 
 ## Docker Compose Setup
@@ -364,7 +364,7 @@ The worker will create or update demo products, create snapshots, create product
 
 From the dashboard:
 
-1. Sign in at [http://localhost:3000/login](http://localhost:3000/login).
+1. Sign in at [http://localhost:3001/login](http://localhost:3001/login).
 2. Open the Stores page.
 3. Create or edit a store with `MOCK` mode.
 4. Click `Scan`.
@@ -376,7 +376,7 @@ Configure an active webhook in the database, through the Settings API, or throug
 
 From the dashboard:
 
-1. Sign in at [http://localhost:3000/login](http://localhost:3000/login).
+1. Sign in at [http://localhost:3001/login](http://localhost:3001/login).
 2. Open Settings.
 3. Create a webhook with target `DEFAULT`, `POKEMON`, `ONE_PIECE`, `HIGH_PRIORITY`, `ERROR_LOG`, `TEST`, `RESTOCK`, `PRICE_DROP`, or `PREORDER`.
 4. Click `Test`.
