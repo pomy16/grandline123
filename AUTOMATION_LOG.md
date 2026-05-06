@@ -834,3 +834,94 @@ Next planned step:
 Current PR ready to merge:
 
 - Still draft. The local setup issue is fixed and verified, but the daily PR should remain draft until manual UI review.
+
+### 16:29 CEST - Log-Driven Discord Routing And Alert Noise Fix
+
+Work continued from previous unmerged PR: yes, continuing on `daily-autonomous-improvements` / PR #17.
+
+What was inspected:
+
+- Current git status and untracked local backup files.
+- Recent Products, ProductEvents, NotificationLogs, ScanLogs, ScanJobs, SourceCandidates, Stores, and DiscordWebhook records through read-only Prisma inspection.
+- Product Test API route, Products page test action, worker queue handler, notification routing code, Discord delivery code, scanner persistence/event/notification flow, keyword rules, and stock/relevance filters.
+- Safe dry-run monitor previews for configured CZ stores without persistence, events, or Discord sends.
+
+Exact bad records/examples found:
+
+- Alza product `Pokémon TCG: SV08 Surging Sparks - Booster - Pokémon karty` has the correct store and `cz-alza` store webhook assignment.
+- Its Product Test notification log was `target=DEFAULT`, `status=SENT`, and had `response.route=null`, which means the old Product Test path bypassed store-first route diagnostics.
+- Several earlier store scans had noisy historical alerts for unavailable `UNKNOWN` products and non-target/category/product-quality misses, including examples like `Tcgkarty.cz na Firmy.cz`, `číst celé`, `Detail`, `Slide`, `Fotbalové karty`, `Kusové karty Pokémon`, `Tolarie`, and `https://www.bandai-tcg-plus.com/`.
+- Store summaries showed many notifications skipped correctly because `PRODUCT_UPDATED` delivery is disabled by default, but this was not visible enough in scan summaries.
+
+Root cause:
+
+- `/api/products/:id/test-alert` always queued `target: DEFAULT`.
+- `sendProductTestAlert` treated any requested target as explicit and selected the newest active webhook with that target.
+- Store-specific webhooks are also stored as `target=DEFAULT`, so a DEFAULT fallback could choose an unrelated store webhook, such as `cz-vesely-drak`, instead of the product's store webhook.
+- Target fallback lookup did not exclude store-assigned webhooks.
+
+Why Discover/Scan produced few or no notifications:
+
+- In many cases this was correct: scans found 0 relevant products, products were already known, `PRODUCT_UPDATED` notifications were disabled, or products had `UNKNOWN` stock with no price/cart/availability signal.
+- In other cases this was a bug/noise risk: `NEW_PRODUCT` alerts were still allowed for clearly non-actionable unavailable or unknown-stock products, and fallback routing could pick unrelated store webhooks.
+
+Stores dry-run tested safely:
+
+- Alza: raw 211, relevant 25, in-stock relevant 0. Source works for discovery but products are mostly unknown-stock/no price, so future new alerts should be tracked without noisy Discord unless actionable.
+- Alza sitemap products: raw 3, relevant 0; not useful, keep needs review/paused.
+- Cardstore: raw 128 before stricter filter, relevant 31, in-stock 0; category tiles were further tightened.
+- Dráčik: raw 436, relevant 0; safe but empty for target products.
+- Gengar.cz: raw 92, relevant went from 20 to 8 after stricter filtering; 2 in-stock relevant.
+- Hra na netu: raw 20, relevant 0.
+- Knihy Dobrovský: raw 115, relevant 12, in-stock relevant 0 in this dry-run; still extracts valid sealed titles and stays routed to `cz-knihy-dobrovsky`.
+- Kuma: returned HTTP 429; no bypass attempted.
+- Luxor: raw 130, relevant 7, in-stock relevant 0.
+- Najáda: raw 117, relevant 27 after stricter filtering, in-stock relevant 2; placeholder `cz-najada` webhook created inactive.
+- Pompo: raw 1596, relevant 16, in-stock relevant 16.
+- Professor Onyx: raw 40, relevant 5, in-stock relevant 5; placeholder `cz-professor-onyx` webhook created inactive.
+- Smarty: raw 135, relevant 41, in-stock relevant 0.
+- TCG Karty: raw 198, relevant 1, in-stock relevant 0; many article/info candidates remain unsafe/needs attention.
+- Tolarie: raw 0, relevant 0.
+- Veselý Drak: raw 65, relevant 38, in-stock relevant 33.
+
+What changed:
+
+- Product Test no longer sends a DEFAULT target from the API and no longer treats product tests as generic target tests.
+- Product Test now resolves the product's store-first route, with safe fallback only if no active store webhook exists.
+- Target fallback webhook lookup now excludes webhooks assigned to stores, preventing unrelated store-specific webhooks from being used as global DEFAULT fallback.
+- Notification logs for product tests now include route context/webhook name without full URL.
+- Non-actionable `NEW_PRODUCT` and `SOLD_OUT` alerts are skipped when products are out of stock or have UNKNOWN stock with no price/cart/availability signal; RESTOCK remains actionable.
+- Scanner summary diagnostics now include raw/relevant/in-stock counts, skipped counts/reasons, created/updated/unchanged counts, notification sent/skipped/failed counts, and notification skip reasons.
+- Seed now creates inactive placeholder store webhook records for CZ presets by webhook name, including `cz-najada`, `cz-professor-onyx`, and `cz-kuma`, without committing real webhook URLs.
+- Relevance filter was tightened for single cards and category tiles such as exact `Booster Bundle`, `Booster Balíčky`, `Battle Deck`, `Booster boxy a speciální boxy`, and generic `McDonald's Collection 2024`, while preserving strong sealed patterns like boosters, ETBs, blisters, tins, premium collections, starter decks, and battle decks with real product titles.
+- README now documents Product Test store-first routing, out-of-stock/unknown-stock alert suppression, and scan diagnostics.
+
+Intentionally not changed:
+
+- No fetch behavior changes.
+- No bypass/evasion/proxy/CAPTCHA behavior.
+- No automatic purchasing or checkout automation.
+- No real Discord webhook URLs were committed.
+- Existing historical noisy data was not deleted.
+
+Test results:
+
+- `npm run prisma:seed` passed locally and created inactive placeholders for missing store webhook names.
+- `npm run typecheck` passed.
+- `npm test` passed.
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed.
+- `git diff --check` passed.
+
+Remaining risk:
+
+- The dry-run preview does not click through every visible product page, so some stores with `UNKNOWN` stock may need source-specific availability selector improvements later.
+- Historical products/events/notifications created before these filters remain in the database until ignored manually.
+- Najáda and Professor Onyx placeholders are inactive until real URLs are added in Settings.
+
+Next planned step:
+
+- Commit and push this focused routing/noise/diagnostics update to the existing draft PR #17 after one final status review.
+
+Current PR ready to merge:
+
+- Still draft. Core checks pass, but the PR should remain draft until the user retests Product Test routing and scan diagnostics locally.

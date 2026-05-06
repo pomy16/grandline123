@@ -21,7 +21,7 @@ export const scanWorker = new Worker(
     }
 
     if (job.name === "test-product-alert") {
-      return sendProductTestAlert(job.data.productId, job.data.target);
+      return sendProductTestAlert(job.data.productId);
     }
 
     throw new Error(`Unknown queue job: ${job.name}`);

@@ -3,6 +3,7 @@ import {
   inferGame,
   isLikelyAccessoryProduct,
   isLikelySealedTcgProductTitle,
+  isRelevantTargetProduct,
   isNonProductContentTitle,
   keywordRuleMatchesProduct,
   normalizeTitle,
@@ -132,7 +133,14 @@ describe("shared normalization utilities", () => {
       "Tcgkarty.cz na Firmy.cz",
       "UP Plastový toploader 35pt (25 ks) - Obaly na karty",
       "Gamegenic: Casual Album 18-Pocket Black - Alba na karty",
-      "One Piece: Grand Ship Collection Model Kit - Going Merry"
+      "One Piece: Grand Ship Collection Model Kit - Going Merry",
+      "Pokémon – Booster boxy a speciální boxy",
+      "Booster boxy a speciální boxy",
+      "Booster Balíčky",
+      "Booster Bundle",
+      "Bundle Display",
+      "Battle Deck",
+      "McDonald's Collection 2024"
     ]) {
       expect(isLikelySealedTcgProductTitle(title)).toBe(false);
       expect(
@@ -150,6 +158,20 @@ describe("shared normalization utilities", () => {
           }
         )
       ).toBe(false);
+    }
+  });
+
+  it("rejects single-card products from sealed-product alert matching", () => {
+    for (const title of [
+      "Kusové karty Pokémon",
+      "Jednotlivé karty Pokémon",
+      "Pokémon karta samostatně Pikachu",
+      "Pokemon single card Charizard",
+      "Bazarové jednotlivé karty Pokémon",
+      "PSA graded Pokémon individual card"
+    ]) {
+      expect(isNonProductContentTitle(title)).toBe(true);
+      expect(isLikelySealedTcgProductTitle(title)).toBe(false);
     }
   });
 
@@ -177,6 +199,25 @@ describe("shared normalization utilities", () => {
     ]) {
       expect(isLikelySealedTcgProductTitle(title)).toBe(true);
     }
+  });
+
+  it("uses source game context for strong sealed terms but not generic category/collection labels", () => {
+    expect(
+      isRelevantTargetProduct({
+        title: "Snow Hazard Booster (asijsky)",
+        normalizedTitle: normalizeTitle("Snow Hazard Booster (asijsky)"),
+        game: "POKEMON",
+        category: "Sealed"
+      })
+    ).toBe(true);
+    expect(
+      isRelevantTargetProduct({
+        title: "McDonald's Collection 2024",
+        normalizedTitle: normalizeTitle("McDonald's Collection 2024"),
+        game: "POKEMON",
+        category: "Sealed"
+      })
+    ).toBe(false);
   });
 
   it("supports fuzzy keyword matching for compact product titles", () => {

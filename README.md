@@ -654,14 +654,20 @@ Product title cleanup removes category badges, stock chips, load-more controls, 
 
 Notification delivery logs include route diagnostics for new deliveries. The Logs page shows whether a message used store-first routing, fallback routing, or optional high-priority multi-route, plus the matched webhook record name without exposing the webhook URL. This helps verify that high-priority store events stay in the store channel when `DISCORD_MULTI_ROUTE_HIGH_PRIORITY=false`.
 
+Product test alerts on the Products page use the same store-first routing as normal product events. They never use the `TEST` target or a random active `DEFAULT` store webhook. Settings webhook tests remain separate and test exactly the selected webhook.
+
+Out-of-stock products are tracked for future restock detection, but they do not send noisy `NEW_PRODUCT` or `SOLD_OUT` Discord alerts. A new product with `UNKNOWN` stock, no price, no public cart shortcut, and no availability signal is also tracked without an immediate alert. If a tracked product later changes from unavailable to available, the `RESTOCK` event remains actionable and routes through the store-specific webhook first.
+
+Scan logs include a compact diagnostic summary: scan sources, raw product count, relevant sealed product count, in-stock relevant count, skipped count and reasons, product create/update/unchanged counts, event count, notification sent/skipped/failed counts, and notification skip reasons. Full Discord webhook URLs are never logged.
+
 Recommended discovery test flow:
 
 1. Run `Discover` for one paused store.
 2. Promote only a candidate marked `Target found`.
 3. Run `Scan`.
 4. Check Products for real product detail URLs, prices/images/product IDs, and no category/control labels.
-5. Check that accessory products such as albums, folios, sleeves, deck boxes, playmats, figures, guide articles, and Firmy.cz profiles are listed in scan logs as skipped non-targets and do not create new Events.
-6. Check notification delivery history: store events should go to the store channel first, `PRODUCT_UPDATED` alerts are skipped unless enabled, and Discord rate-limit retry details are logged when applicable.
+5. Check that accessory products such as albums, folios, sleeves, deck boxes, playmats, figures, guide articles, single cards, category tiles, and Firmy.cz profiles are listed in scan logs as skipped non-targets and do not create new Events.
+6. Check notification delivery history: store events should go to the store channel first, `PRODUCT_UPDATED` alerts are skipped unless enabled, non-actionable out-of-stock/unknown items are tracked without alerts, and Discord rate-limit retry details are logged when applicable.
 
 ## Adding Keyword Rules
 

@@ -153,6 +153,6 @@ productsRouter.post("/:id/unignore", async (request, response) => {
 });
 
 productsRouter.post("/:id/test-alert", async (request, response) => {
-  const job = await scanQueue.add("test-product-alert", { productId: request.params.id, target: request.body.target ?? "DEFAULT" });
+  const job = await scanQueue.add("test-product-alert", { productId: request.params.id });
   response.status(202).json({ data: { queueJobId: job.id } });
 });

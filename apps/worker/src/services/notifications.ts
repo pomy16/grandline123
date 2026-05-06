@@ -96,9 +96,13 @@ async function resolveCandidateWebhook(candidate: WebhookRouteCandidate) {
     });
   }
   return prisma.discordWebhook.findFirst({
-    where: { target: candidate.target, active: true },
+    where: targetFallbackWebhookWhere(candidate.target),
     orderBy: { updatedAt: "desc" }
   });
+}
+
+export function targetFallbackWebhookWhere(target: WebhookTarget) {
+  return { target, active: true, stores: { none: {} } } as const;
 }
 
 function routeReason(candidate: WebhookRouteCandidate, params: Parameters<typeof routeCandidates>[0]) {
@@ -151,6 +155,24 @@ async function getGlobalCooldownSeconds() {
   const setting = await prisma.appSetting.findUnique({ where: { key: "notificationCooldownSeconds" } });
   if (typeof setting?.value === "number") return setting.value;
   return workerConfig.notificationCooldownSeconds;
+}
+
+export function actionableNotificationSkipReason(params: {
+  eventType: EventType;
+  stockStatus: Product["stockStatus"];
+  isAvailable: boolean;
+  isPreorder: boolean;
+  price?: Product["price"] | number | string | null;
+  publicCartUrl?: string | null;
+}) {
+  if (params.eventType === "RESTOCK" || params.eventType === "PREORDER_OPENED") return null;
+  if (params.isAvailable || params.isPreorder || params.stockStatus === "IN_STOCK" || params.stockStatus === "PREORDER") return null;
+  if (params.stockStatus === "OUT_OF_STOCK") return "Product is out of stock; tracked for future RESTOCK but not alerted.";
+  if (params.eventType === "SOLD_OUT") return "SOLD_OUT is tracked for history but not sent as an actionable alert.";
+  if (params.eventType === "NEW_PRODUCT" && params.price === null && !params.publicCartUrl) {
+    return "NEW_PRODUCT has UNKNOWN stock and no price/cart/actionable availability signal; tracked without Discord alert.";
+  }
+  return null;
 }
 
 function stateHashForEvent(event: EventWithProduct) {
@@ -280,6 +302,36 @@ export async function notifyProductEvent(eventId: string) {
     return { status: "SKIPPED", reason: "No active webhook." };
   }
 
+  const nonActionableReason = actionableNotificationSkipReason({
+    eventType: event.type as EventType,
+    stockStatus: event.product.stockStatus,
+    isAvailable: event.product.isAvailable,
+    isPreorder: event.product.isPreorder,
+    price: event.product.price,
+    publicCartUrl: event.product.publicCartUrl
+  });
+  if (nonActionableReason) {
+    const deliveries = [];
+    for (const route of routes) {
+      const payloadHash = createHash("sha256")
+        .update(JSON.stringify({ stateHash, target: route.webhook.target, webhookId: route.webhook.id, eventType: event.type, productId: event.productId }))
+        .digest("hex");
+      await prisma.notificationLog.create({
+        data: {
+          productId: event.productId,
+          eventId: event.id,
+          target: route.webhook.target,
+          status: "SKIPPED",
+          payloadHash,
+          error: nonActionableReason,
+          response: { route: routeContext(route, routingParams) }
+        }
+      });
+      deliveries.push({ status: "SKIPPED", reason: nonActionableReason, target: route.webhook.target });
+    }
+    return deliveries.length === 1 ? deliveries[0] : { status: "MULTI_ROUTE", deliveries };
+  }
+
   const deliveries = [];
   for (const route of routes) {
     const { webhook } = route;
@@ -332,21 +384,20 @@ export async function notifyProductEvent(eventId: string) {
   return deliveries.length === 1 ? deliveries[0] : { status: "MULTI_ROUTE", deliveries };
 }
 
-export async function sendProductTestAlert(productId: string, requestedTarget?: WebhookTarget) {
+export async function sendProductTestAlert(productId: string) {
   const product = await prisma.product.findUniqueOrThrow({
     where: { id: productId },
     include: { store: true }
   });
-  const webhook = requestedTarget
-    ? await prisma.discordWebhook.findFirst({ where: { target: requestedTarget, active: true }, orderBy: { updatedAt: "desc" } })
-    : (await resolveWebhookRoutes({
-        eventType: "NEW_PRODUCT",
-        productGame: product.game,
-        priority: "NORMAL",
-        storeWebhookId: product.store.discordWebhookId,
-        isTest: true
-      }))[0]?.webhook ?? null;
-  const target = webhook?.target ?? requestedTarget ?? "TEST";
+  const routingParams = {
+    eventType: "NEW_PRODUCT" as EventType,
+    productGame: product.game,
+    priority: "NORMAL" as const,
+    storeWebhookId: product.store.discordWebhookId,
+    multiRouteHighPriority: false
+  };
+  const route = (await resolveWebhookRoutes(routingParams))[0] ?? null;
+  const target = route?.webhook.target ?? "DEFAULT";
   const payload = buildDiscordPayload({
     eventType: "NEW_PRODUCT",
     productTitle: product.title,
@@ -362,24 +413,36 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
   });
   const payloadHash = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
-  if (!webhook) {
+  if (!route) {
     await prisma.notificationLog.create({
       data: {
         productId: product.id,
         target,
         status: "SKIPPED",
         payloadHash,
-        error: `No active Discord webhook configured for ${target} or fallback targets.`
+        error: "No active Discord webhook matched the product store route or safe fallback targets.",
+        response: {
+          route: {
+            reason: "Product test uses store-first routing, but no active store, game, event-type, or global fallback webhook was available.",
+            storeWebhookConfigured: Boolean(product.store.discordWebhookId),
+            multiRouteHighPriority: false
+          }
+        }
       }
     });
     return { status: "SKIPPED", reason: "No active webhook." };
   }
 
   return sendWebhook({
-    webhookUrl: webhook.url,
-    target: webhook.target,
-    webhookName: webhook.name,
+    webhookUrl: route.webhook.url,
+    target: route.webhook.target,
+    webhookName: route.webhook.name,
     productId: product.id,
-    payload
+    payload,
+    payloadHash,
+    routeContext: {
+      ...routeContext(route, routingParams),
+      reason: `Product test alert: ${route.reason}`
+    }
   });
 }

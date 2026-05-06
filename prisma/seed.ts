@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createHash, randomBytes, scryptSync } from "node:crypto";
-import { CZ_STORE_PRESETS, buildStorePresetNotes, resolvePresetWebhookId } from "../packages/shared/src/cz-store-presets";
+import { CZ_STORE_PRESETS, CZ_STORE_PRESET_WEBHOOK_NAMES, buildStorePresetNotes, resolvePresetWebhookId } from "../packages/shared/src/cz-store-presets";
 
 const prisma = new PrismaClient();
 
@@ -99,6 +99,31 @@ async function seedWebhooks() {
       where: { id },
       update: { name, target, active: false },
       create: { id, name, target, url, active: false }
+    });
+  }
+}
+
+async function seedCzechStoreWebhookPlaceholders() {
+  for (const name of [...new Set(CZ_STORE_PRESET_WEBHOOK_NAMES)]) {
+    const existingByName = await prisma.discordWebhook.findFirst({ where: { name }, orderBy: { updatedAt: "desc" } });
+    if (existingByName) {
+      await prisma.discordWebhook.update({
+        where: { id: existingByName.id },
+        data: { target: "DEFAULT", active: existingByName.active }
+      });
+      continue;
+    }
+
+    await prisma.discordWebhook.upsert({
+      where: { id: `seed-${name}-webhook` },
+      update: { name, target: "DEFAULT", active: false },
+      create: {
+        id: `seed-${name}-webhook`,
+        name,
+        target: "DEFAULT",
+        url: placeholderWebhookUrl(name),
+        active: false
+      }
     });
   }
 }
@@ -435,6 +460,7 @@ async function seedSettings() {
 async function main() {
   await seedAdmin();
   await seedWebhooks();
+  await seedCzechStoreWebhookPlaceholders();
   await seedRules();
   await seedDemoData();
   await seedCzechStorePresets();

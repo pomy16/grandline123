@@ -8,7 +8,7 @@ import { prisma } from "../prisma";
 import { MonitorRequestError } from "../http/safe-http-client";
 import { workerConfig } from "../config";
 import { assertNoMockProductsForRealStore } from "./monitor-safety";
-import { notifyProductEvent } from "./notifications";
+import { actionableNotificationSkipReason, notifyProductEvent } from "./notifications";
 import { toStoreConfig } from "./store-config";
 
 export function stateHash(product: NormalizedProduct, eventType: EventType): string {
@@ -187,7 +187,7 @@ async function persistProduct(store: Store, incoming: NormalizedProduct) {
     )
   );
 
-  return { product, events: productEvents };
+  return { product, events: productEvents, wasCreated: !existing, wasChanged: changed };
 }
 
 async function applyKeywordRules(products: NormalizedProduct[]) {
@@ -284,6 +284,58 @@ export function filterRelevantScanProducts(products: NormalizedProduct[]) {
   return { accepted: dedupeScanProducts(accepted), skipped };
 }
 
+function countByReason(skipped: Array<{ reason: string }>) {
+  return skipped.reduce<Record<string, number>>((counts, skippedProduct) => {
+    counts[skippedProduct.reason] = (counts[skippedProduct.reason] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function hasInStockActionSignal(product: NormalizedProduct) {
+  return product.isAvailable || product.isPreorder || product.stockStatus === "IN_STOCK" || product.stockStatus === "PREORDER";
+}
+
+function hasAnyActionSignal(product: NormalizedProduct) {
+  return hasInStockActionSignal(product) || product.price !== null || Boolean(product.publicCartUrl);
+}
+
+function scanNotificationSummary() {
+  return {
+    queued: 0,
+    sent: 0,
+    skipped: 0,
+    failed: 0,
+    skipReasons: {} as Record<string, number>
+  };
+}
+
+function addSkipReason(summary: ReturnType<typeof scanNotificationSummary>, reason: string) {
+  summary.skipReasons[reason] = (summary.skipReasons[reason] ?? 0) + 1;
+}
+
+function recordNotificationResult(summary: ReturnType<typeof scanNotificationSummary>, result: unknown) {
+  if (!result || typeof result !== "object") return;
+  const value = result as { ok?: boolean; status?: string; reason?: string; deliveries?: unknown[]; error?: string };
+  if (Array.isArray(value.deliveries)) {
+    for (const delivery of value.deliveries) recordNotificationResult(summary, delivery);
+    return;
+  }
+  summary.queued += 1;
+  if (value.ok === true) {
+    summary.sent += 1;
+    return;
+  }
+  if (value.status === "SKIPPED") {
+    summary.skipped += 1;
+    addSkipReason(summary, value.reason ?? "Notification skipped.");
+    return;
+  }
+  if (value.ok === false) {
+    summary.failed += 1;
+    if (value.error) addSkipReason(summary, value.error);
+  }
+}
+
 function monitorErrorContext(error: unknown) {
   if (error instanceof MonitorRequestError) {
     return {
@@ -319,6 +371,13 @@ export async function scanStore(storeId: string, scanJobId?: string) {
     assertNoMockProductsForRealStore(store, products);
     const parserWarnings = "warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.slice(0, 20) : [];
     let eventsCreated = 0;
+    let productsCreated = 0;
+    let productsUpdated = 0;
+    let productsUnchanged = 0;
+    const notificationSummary = scanNotificationSummary();
+    const inStockRelevantFound = products.filter(hasInStockActionSignal).length;
+    const relevantWithActionSignal = products.filter(hasAnyActionSignal).length;
+    const outOfStockSkippedCount = products.filter((product) => product.stockStatus === "OUT_OF_STOCK").length;
 
     await prisma.scanLog.create({
       data: {
@@ -329,10 +388,18 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           mode: store.mode,
           monitorMode: store.mode,
           fallbackUsed: false,
+          scanSources: store.listingUrls,
           rawProductCount: rawProducts.length,
+          rawFound: rawProducts.length,
           productCount: products.length,
+          relevantFound: products.length,
+          inStockRelevantFound,
+          relevantWithActionSignal,
           productsExtracted: products.length,
           skippedNonTargetCount: relevance.skipped.length,
+          skippedCount: relevance.skipped.length,
+          skippedByReason: countByReason(relevance.skipped),
+          outOfStockSkippedCount,
           skippedNonTargetProducts: relevance.skipped.slice(0, 20),
           products: products.slice(0, 10).map((product) => ({
             title: product.title,
@@ -370,6 +437,8 @@ export async function scanStore(storeId: string, scanJobId?: string) {
             mode: store.mode,
             monitorMode: store.mode,
             skippedNonTargetCount: relevance.skipped.length,
+            skippedCount: relevance.skipped.length,
+            skippedByReason: countByReason(relevance.skipped),
             skippedNonTargetProducts: relevance.skipped.slice(0, 50)
           } as Prisma.InputJsonValue
         }
@@ -378,9 +447,12 @@ export async function scanStore(storeId: string, scanJobId?: string) {
 
     for (const product of products) {
       const result = await persistProduct(store, product);
+      if (result.wasCreated) productsCreated += 1;
+      else if (result.wasChanged) productsUpdated += 1;
+      else productsUnchanged += 1;
       eventsCreated += result.events.length;
       for (const event of result.events) {
-        await notifyProductEvent(event.id);
+        recordNotificationResult(notificationSummary, await notifyProductEvent(event.id));
       }
     }
 
@@ -402,22 +474,59 @@ export async function scanStore(storeId: string, scanJobId?: string) {
         data: { status: "SUCCEEDED", finishedAt, durationMs, productsFound: products.length, eventsCreated }
       });
     }
+    const actionableSuppressionSummary = products.reduce<Record<string, number>>((counts, product) => {
+      const reason = actionableNotificationSkipReason({
+        eventType: "NEW_PRODUCT",
+        stockStatus: product.stockStatus,
+        isAvailable: product.isAvailable,
+        isPreorder: product.isPreorder,
+        price: product.price,
+        publicCartUrl: product.publicCartUrl
+      });
+      if (reason) counts[reason] = (counts[reason] ?? 0) + 1;
+      return counts;
+    }, {});
+    const scanSummary = {
+      mode: store.mode,
+      monitorMode: store.mode,
+      fallbackUsed: false,
+      scanSources: store.listingUrls,
+      rawProductCount: rawProducts.length,
+      rawFound: rawProducts.length,
+      skippedNonTargetCount: relevance.skipped.length,
+      skippedCount: relevance.skipped.length,
+      skippedByReason: countByReason(relevance.skipped),
+      outOfStockSkippedCount,
+      productsFound: products.length,
+      relevantFound: products.length,
+      inStockRelevantFound,
+      relevantWithActionSignal,
+      productsExtracted: products.length,
+      productsCreated,
+      productsUpdated,
+      productsUnchanged,
+      eventsCreated,
+      notificationQueuedCount: notificationSummary.queued,
+      notificationSentCount: notificationSummary.sent,
+      notificationSkippedCount: notificationSummary.skipped,
+      notificationFailedCount: notificationSummary.failed,
+      notificationSkipReasons: notificationSummary.skipReasons,
+      actionableSuppressionSummary,
+      storeWebhookConfigured: Boolean(store.discordWebhookId),
+      durationMs
+    };
+    if (scanJobId) {
+      await prisma.scanJob.update({
+        where: { id: scanJobId },
+        data: { metadata: scanSummary as Prisma.InputJsonValue }
+      });
+    }
     await prisma.scanLog.create({
       data: {
         storeId: store.id,
         severity: "INFO",
         message: `${store.mode} scan completed for ${store.name}.`,
-        context: {
-          mode: store.mode,
-          monitorMode: store.mode,
-          fallbackUsed: false,
-          rawProductCount: rawProducts.length,
-          skippedNonTargetCount: relevance.skipped.length,
-          productsFound: products.length,
-          productsExtracted: products.length,
-          eventsCreated,
-          durationMs
-        }
+        context: scanSummary as Prisma.InputJsonValue
       }
     });
 
