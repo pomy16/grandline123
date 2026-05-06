@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedProduct } from "@tcg-monitor/shared";
-import { detectEvents, filterRelevantScanProducts, mergeIncomingWithExisting, stateHash } from "./scanner";
+import { dedupeScanProducts, detectEvents, filterRelevantScanProducts, mergeIncomingWithExisting, stateHash } from "./scanner";
 
 const incoming: NormalizedProduct = {
   title: "Pokemon TCG Booster Box",
@@ -94,5 +94,31 @@ describe("scan event generation", () => {
       "Pokémon Hrací podložka - Frosted Forest",
       "Jak začít sbírat Yu-Gi-Oh! karty v Česku"
     ]);
+  });
+
+  it("deduplicates repeated scan results by product URL, SKU, or EAN before persistence", () => {
+    const duplicateWithoutPrice = {
+      ...incoming,
+      title: "One Piece Adventure Booster",
+      normalizedTitle: "one piece adventure booster",
+      canonicalUrl: "https://example.com/one-piece-adventure-booster",
+      url: "https://example.com/one-piece-adventure-booster",
+      price: null,
+      game: "ONE_PIECE" as const
+    };
+    const duplicateWithPrice = {
+      ...duplicateWithoutPrice,
+      title: "One Piece - Adventure on Kami's Island Booster OP-15",
+      normalizedTitle: "one piece adventure on kami s island booster op 15",
+      price: 169
+    };
+
+    const deduped = dedupeScanProducts([incoming, duplicateWithoutPrice, duplicateWithPrice]);
+
+    expect(deduped.map((product) => product.canonicalUrl)).toEqual([
+      "https://example.com/box",
+      "https://example.com/one-piece-adventure-booster"
+    ]);
+    expect(deduped.find((product) => product.canonicalUrl.includes("one-piece"))?.price).toBe(169);
   });
 });

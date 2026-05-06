@@ -13,6 +13,7 @@ import { Input } from "../../components/ui/input";
 import { Pagination } from "../../components/ui/pagination";
 import { apiFetch } from "../../lib/api-client";
 import { formatDateTime, formatMoney, type PageMeta } from "../../lib/format";
+import { wouldSkipProductNow } from "../../lib/product-quality";
 
 type ProductRecord = {
   id: string;
@@ -98,6 +99,7 @@ export default function ProductsPage() {
     });
     return params.toString();
   }, [filters]);
+  const visibleSkippedProducts = useMemo(() => products.filter((product) => !product.ignored && wouldSkipProductNow(product)), [products]);
 
   function updateFilters(patch: Partial<typeof filters>) {
     setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
@@ -137,6 +139,30 @@ export default function ProductsPage() {
     }
   }
 
+  async function bulkIgnoreVisibleSkippedProducts() {
+    if (visibleSkippedProducts.length === 0) return;
+    const confirmed = window.confirm(
+      `Ignore ${visibleSkippedProducts.length} visible products that the current sealed TCG filter would skip? This does not delete data and can be restored later.`
+    );
+    if (!confirmed) return;
+
+    setMessage(null);
+    setError(null);
+    try {
+      const payload = await apiFetch<{ data: { ignored: number } }>("/api/products/bulk-ignore", {
+        method: "POST",
+        body: JSON.stringify({
+          ids: visibleSkippedProducts.map((product) => product.id),
+          reason: "Bulk ignored because current sealed TCG filter would skip this product"
+        })
+      });
+      setMessage(`Ignored ${payload.data.ignored} visible historical false positives.`);
+      await loadProducts();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Bulk ignore failed.");
+    }
+  }
+
   function toggleSort(field: string) {
     setFilters((current) => ({
       ...current,
@@ -154,10 +180,16 @@ export default function ProductsPage() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle>Product catalog</CardTitle>
-              <Button type="button" variant="secondary" onClick={loadProducts} disabled={loading}>
-                <RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden />
-                Refresh
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" onClick={bulkIgnoreVisibleSkippedProducts} disabled={loading || visibleSkippedProducts.length === 0}>
+                  <XCircle size={16} aria-hidden />
+                  Ignore visible skipped ({visibleSkippedProducts.length})
+                </Button>
+                <Button type="button" variant="secondary" onClick={loadProducts} disabled={loading}>
+                  <RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden />
+                  Refresh
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -238,8 +270,10 @@ export default function ProductsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {products.map((product) => (
-                        <tr key={product.id} className="border-b border-border/60 align-top">
+                      {products.map((product) => {
+                        const wouldSkipNow = wouldSkipProductNow(product);
+                        return (
+                          <tr key={product.id} className="border-b border-border/60 align-top">
                           <td className="py-3 pr-4">
                             <div className="flex items-center gap-3">
                               {product.imageUrl ? (
@@ -249,6 +283,12 @@ export default function ProductsPage() {
                               )}
                               <div className="min-w-0">
                                 <div className="max-w-lg font-medium">{product.title}</div>
+                                {wouldSkipNow ? (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    <Badge tone="warning">Would skip now</Badge>
+                                    <span className="text-xs text-muted-foreground">Current relevance filter treats this as non-target or historical noise.</span>
+                                  </div>
+                                ) : null}
                                 <div className="break-all text-xs text-muted-foreground">{product.sku ?? product.ean ?? product.url}</div>
                               </div>
                             </div>
@@ -285,10 +325,17 @@ export default function ProductsPage() {
                                   Open cart
                                 </Button>
                               ) : null}
-                              <Button type="button" variant="secondary" onClick={() => productAction(`/api/products/${product.id}/test-alert`, "Test alert queued.")}>
-                                <Send size={16} aria-hidden />
-                                Test
-                              </Button>
+                              {wouldSkipNow ? (
+                                <Button type="button" variant="secondary" disabled title="Skipped by current relevance filter">
+                                  <Send size={16} aria-hidden />
+                                  Test
+                                </Button>
+                              ) : (
+                                <Button type="button" variant="secondary" onClick={() => productAction(`/api/products/${product.id}/test-alert`, "Test alert queued.")}>
+                                  <Send size={16} aria-hidden />
+                                  Test
+                                </Button>
+                              )}
                               {product.ignored ? (
                                 <Button type="button" variant="ghost" onClick={() => productAction(`/api/products/${product.id}/unignore`, "Product restored.")}>
                                   <RotateCcw size={16} aria-hidden />
@@ -310,8 +357,9 @@ export default function ProductsPage() {
                               )}
                             </div>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

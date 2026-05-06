@@ -62,6 +62,50 @@ productsRouter.get("/", async (request, response) => {
   response.json({ data: products, meta: { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) } });
 });
 
+productsRouter.post("/bulk-ignore", async (request, response) => {
+  const rawIds: unknown[] = Array.isArray(request.body?.ids) ? request.body.ids : [];
+  const ids = [...new Set(rawIds.filter((id): id is string => typeof id === "string" && id.length > 0))];
+  const reason = typeof request.body?.reason === "string" && request.body.reason.trim().length > 0
+    ? request.body.reason.trim()
+    : "Bulk ignored from admin dashboard";
+
+  if (ids.length === 0) {
+    response.status(400).json({ error: "At least one product id is required." });
+    return;
+  }
+
+  if (ids.length > 100) {
+    response.status(400).json({ error: "Bulk ignore is limited to 100 products at a time." });
+    return;
+  }
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true }
+  });
+  const existingIds = products.map((product) => product.id);
+
+  await prisma.$transaction(
+    existingIds.map((id) =>
+      prisma.product.update({
+        where: { id },
+        data: {
+          ignored: true,
+          ignoredProducts: {
+            upsert: {
+              where: { productId: id },
+              update: { reason },
+              create: { reason }
+            }
+          }
+        }
+      })
+    )
+  );
+
+  response.json({ data: { requested: ids.length, ignored: existingIds.length } });
+});
+
 productsRouter.get("/:id", async (request, response) => {
   const product = await prisma.product.findUnique({
     where: { id: request.params.id },

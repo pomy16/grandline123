@@ -76,7 +76,12 @@ export function isValidSourceCandidateUrl(url: string | null, storeConfig: Store
   try {
     const parsed = new URL(url, storeConfig.baseUrl);
     const base = new URL(storeConfig.baseUrl);
+    const path = normalizePathForSafety(parsed.pathname).replace(/\/+$/, "");
+    const segments = path.split("/").filter(Boolean);
     if (parsed.origin !== base.origin) return false;
+    if (segments.length === 0) return false;
+    if (/\/(?:blog|clanek|clanky|clanky-videa|clanky_videa|article|articles|magazin|navod|guide|poradna)(?:\/|$)/.test(`${path}/`)) return false;
+    if (/(^|\/)(jak-|proc-|ochrana-|osobni-udaje|obchodni-podminky|cookie|kontakt|o-nas|reklamace|doprava|platba|spustili-jsme)/.test(path)) return false;
     return ["http:", "https:"].includes(parsed.protocol);
   } catch {
     return false;
@@ -160,6 +165,14 @@ export function isLikelySourcePageUrl(url: string | null, storeConfig: StoreConf
     if (/(^|\/)(jak-|proc-|ochrana-|obchodni-podminky|cookie|kontakt|reklamace|doprava|platba)/.test(path)) return true;
     if (/load-more|loadmore|nacist|dalsi|pagination|ajax/.test(path)) return true;
     if (["pokemon-tcg", "pokemon", "booster", "boostery", "konverzacni-karty", "one-piece", "one-piece-card-game"].includes(segments.join("/"))) return true;
+    if (
+      segments.length <= 2 &&
+      /^(boosters?|boostery|booster-box(?:es)?|booster-boxy|elite-trainer-boxy|hotove-balicky|sberatelske-plechovky|box-sety|prislusenstvi|merchandise|asijske-pokemon-produkty|sety-a-mixy-karet)$/.test(
+        segments[segments.length - 1] ?? ""
+      )
+    ) {
+      return true;
+    }
     for (const key of parsed.searchParams.keys()) {
       if (/^(page|p|sort|filter|q|s|search|category|manufacturer|publisher|limit|offset|country_id|do)$/i.test(key)) return true;
     }

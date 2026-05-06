@@ -28,6 +28,11 @@ function priceLabel(value: unknown, currency: string) {
 }
 
 type WebhookRouteCandidate = { kind: "target"; target: WebhookTarget } | { kind: "webhookId"; webhookId: string };
+type ResolvedWebhookRoute = {
+  webhook: DiscordWebhook;
+  candidate: WebhookRouteCandidate;
+  reason: string;
+};
 
 function addTarget(candidates: WebhookRouteCandidate[], target: WebhookTarget | null | undefined) {
   if (!target) return;
@@ -96,9 +101,34 @@ async function resolveCandidateWebhook(candidate: WebhookRouteCandidate) {
   });
 }
 
-async function resolveWebhooks(params: Parameters<typeof routeCandidates>[0]) {
+function routeReason(candidate: WebhookRouteCandidate, params: Parameters<typeof routeCandidates>[0]) {
+  if (params.isTest) return "TEST notification route.";
+  if (params.isError) return "ERROR_LOG notification route.";
+  if (candidate.kind === "webhookId") return "Store-specific webhook is primary for product events.";
+  if (candidate.target === "HIGH_PRIORITY" && params.storeWebhookId && params.multiRouteHighPriority) return "Extra high-priority copy because multi-route is enabled.";
+  if (candidate.target === "HIGH_PRIORITY") return "High-priority fallback because no active store-specific webhook was available.";
+  const eventTarget = eventTypeTarget(params.eventType);
+  if (candidate.target === eventTarget) return `Event-type fallback for ${params.eventType}.`;
+  if (candidate.target === params.ruleTarget) return "Explicit keyword-rule fallback target.";
+  if (candidate.target === "POKEMON" || candidate.target === "ONE_PIECE") return "Game-specific fallback route.";
+  return "Default fallback route.";
+}
+
+function routeContext(route: ResolvedWebhookRoute, params: Parameters<typeof routeCandidates>[0]) {
+  return {
+    reason: route.reason,
+    routeKind: route.candidate.kind,
+    target: route.webhook.target,
+    webhookName: route.webhook.name,
+    storeFirst: route.candidate.kind === "webhookId",
+    multiRouteHighPriority: Boolean(params.multiRouteHighPriority),
+    storeWebhookConfigured: Boolean(params.storeWebhookId)
+  };
+}
+
+async function resolveWebhookRoutes(params: Parameters<typeof routeCandidates>[0]): Promise<ResolvedWebhookRoute[]> {
   const candidates = routeCandidates(params);
-  const webhooks: DiscordWebhook[] = [];
+  const routes: ResolvedWebhookRoute[] = [];
   const seen = new Set<string>();
 
   for (const candidate of candidates) {
@@ -107,14 +137,14 @@ async function resolveWebhooks(params: Parameters<typeof routeCandidates>[0]) {
     const key = `${webhook.id}:${webhook.url}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    webhooks.push(webhook);
+    routes.push({ webhook, candidate, reason: routeReason(candidate, params) });
   }
 
-  if (params.storeWebhookId && webhooks.length === 0) {
-    return resolveWebhooks({ ...params, storeWebhookId: null });
+  if (params.storeWebhookId && routes.length === 0) {
+    return resolveWebhookRoutes({ ...params, storeWebhookId: null });
   }
 
-  return webhooks;
+  return routes;
 }
 
 async function getGlobalCooldownSeconds() {
@@ -197,14 +227,15 @@ export async function notifyProductEvent(eventId: string) {
 
   const metadata = readMetadata(event);
   const cooldownSeconds = Number(metadata.matchedKeywordRuleCooldownSeconds ?? (await getGlobalCooldownSeconds()));
-  const webhooks = await resolveWebhooks({
+  const routingParams = {
     eventType: event.type as EventType,
     productGame: event.product.game,
     priority: metadata.matchedKeywordRulePriority,
     storeWebhookId: event.product.store.discordWebhookId,
     ruleTarget: metadata.matchedKeywordRuleWebhookTarget,
     multiRouteHighPriority: discordMultiRouteHighPriority()
-  });
+  };
+  const routes = await resolveWebhookRoutes(routingParams);
   const fallbackTarget = metadata.matchedKeywordRuleWebhookTarget ?? "DEFAULT";
 
   const oldValue = event.oldValue && typeof event.oldValue === "object" && !Array.isArray(event.oldValue) ? event.oldValue : {};
@@ -225,7 +256,7 @@ export async function notifyProductEvent(eventId: string) {
   });
   const stateHash = stateHashForEvent(event);
 
-  if (webhooks.length === 0) {
+  if (routes.length === 0) {
     const payloadHash = createHash("sha256")
       .update(JSON.stringify({ stateHash, target: fallbackTarget, eventType: event.type, productId: event.productId }))
       .digest("hex");
@@ -236,17 +267,26 @@ export async function notifyProductEvent(eventId: string) {
         target: fallbackTarget,
         status: "SKIPPED",
         payloadHash,
-        error: `No active Discord webhook configured for ${fallbackTarget} or fallback targets.`
+        error: `No active Discord webhook configured for ${fallbackTarget} or fallback targets.`,
+        response: {
+          route: {
+            reason: "No active webhook matched store-first, event-type, rule, game, or default fallback routing.",
+            storeWebhookConfigured: Boolean(event.product.store.discordWebhookId),
+            multiRouteHighPriority: routingParams.multiRouteHighPriority
+          }
+        }
       }
     });
     return { status: "SKIPPED", reason: "No active webhook." };
   }
 
   const deliveries = [];
-  for (const webhook of webhooks) {
+  for (const route of routes) {
+    const { webhook } = route;
     const payloadHash = createHash("sha256")
       .update(JSON.stringify({ stateHash, target: webhook.target, webhookId: webhook.id, eventType: event.type, productId: event.productId }))
       .digest("hex");
+    const deliveryRouteContext = routeContext(route, routingParams);
 
     const skipReason = await shouldSkipNotification({ event, target: webhook.target, payloadHash, stateHash, cooldownSeconds });
     if (skipReason) {
@@ -257,7 +297,8 @@ export async function notifyProductEvent(eventId: string) {
           target: webhook.target,
           status: "SKIPPED",
           payloadHash,
-          error: skipReason
+          error: skipReason,
+          response: { route: deliveryRouteContext }
         }
       });
       deliveries.push({ status: "SKIPPED", reason: skipReason, target: webhook.target });
@@ -271,7 +312,8 @@ export async function notifyProductEvent(eventId: string) {
       eventId: event.id,
       productId: event.productId,
       payload,
-      payloadHash
+      payloadHash,
+      routeContext: deliveryRouteContext
     });
     deliveries.push(delivery);
   }
@@ -297,13 +339,13 @@ export async function sendProductTestAlert(productId: string, requestedTarget?: 
   });
   const webhook = requestedTarget
     ? await prisma.discordWebhook.findFirst({ where: { target: requestedTarget, active: true }, orderBy: { updatedAt: "desc" } })
-    : (await resolveWebhooks({
+    : (await resolveWebhookRoutes({
         eventType: "NEW_PRODUCT",
         productGame: product.game,
         priority: "NORMAL",
         storeWebhookId: product.store.discordWebhookId,
         isTest: true
-      }))[0] ?? null;
+      }))[0]?.webhook ?? null;
   const target = webhook?.target ?? requestedTarget ?? "TEST";
   const payload = buildDiscordPayload({
     eventType: "NEW_PRODUCT",

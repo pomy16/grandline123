@@ -119,10 +119,20 @@ describe("shared normalization utilities", () => {
       "Pokémon: Kroužkové album na stránkové obaly 25 x 31,5 cm - Pikachu Mimikyu",
       "Pokémon Bojová figurka - Horsea & Litwick",
       "Pokémon Bojová figurka - Pikachu & Goomy",
+      "Pokémon TCG: Scarlet Violet 01 - Mini Album + booster",
+      "číst celé",
+      "Detail",
+      "Slide",
+      "Sběratelské karty",
+      "Jednotlivé karty",
+      "Boostery",
+      "Booster boxy",
+      "pokémon karty",
       "Jak začít sbírat Yu-Gi-Oh! karty v Česku",
       "Tcgkarty.cz na Firmy.cz",
       "UP Plastový toploader 35pt (25 ks) - Obaly na karty",
-      "Gamegenic: Casual Album 18-Pocket Black - Alba na karty"
+      "Gamegenic: Casual Album 18-Pocket Black - Alba na karty",
+      "One Piece: Grand Ship Collection Model Kit - Going Merry"
     ]) {
       expect(isLikelySealedTcgProductTitle(title)).toBe(false);
       expect(
@@ -146,6 +156,12 @@ describe("shared normalization utilities", () => {
   it("marks article/profile labels as non-product content", () => {
     expect(isNonProductContentTitle("Jak začít sbírat Yu-Gi-Oh! karty v Česku")).toBe(true);
     expect(isNonProductContentTitle("Tcgkarty.cz na Firmy.cz")).toBe(true);
+    expect(isNonProductContentTitle("číst celé")).toBe(true);
+    expect(isNonProductContentTitle("Detail")).toBe(true);
+    expect(isNonProductContentTitle("Slide")).toBe(true);
+    expect(isNonProductContentTitle("Sběratelské karty")).toBe(true);
+    expect(isNonProductContentTitle("Jednotlivé karty")).toBe(true);
+    expect(isNonProductContentTitle("Boostery")).toBe(true);
   });
 
   it("allows target sealed TCG products through the relevance gate", () => {

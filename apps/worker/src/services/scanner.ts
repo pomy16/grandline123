@@ -237,6 +237,37 @@ function productRelevanceReason(product: NormalizedProduct) {
   return null;
 }
 
+function scanProductDedupeKey(product: NormalizedProduct) {
+  if (product.ean) return `ean:${product.ean}`;
+  if (product.sku) return `sku:${product.sku}`;
+  return `url:${product.canonicalUrl}`;
+}
+
+function productCompletenessScore(product: NormalizedProduct) {
+  return [
+    product.price !== null && product.price !== undefined,
+    Boolean(product.imageUrl),
+    Boolean(product.sku),
+    Boolean(product.ean),
+    product.game !== "UNKNOWN",
+    Boolean(product.category)
+  ].filter(Boolean).length;
+}
+
+export function dedupeScanProducts(products: NormalizedProduct[]) {
+  const byIdentity = new Map<string, NormalizedProduct>();
+
+  for (const product of products) {
+    const key = scanProductDedupeKey(product);
+    const existing = byIdentity.get(key);
+    if (!existing || productCompletenessScore(product) > productCompletenessScore(existing)) {
+      byIdentity.set(key, product);
+    }
+  }
+
+  return Array.from(byIdentity.values());
+}
+
 export function filterRelevantScanProducts(products: NormalizedProduct[]) {
   const accepted: NormalizedProduct[] = [];
   const skipped: Array<{ title: string; url: string; reason: string }> = [];
@@ -250,7 +281,7 @@ export function filterRelevantScanProducts(products: NormalizedProduct[]) {
     accepted.push(product);
   }
 
-  return { accepted, skipped };
+  return { accepted: dedupeScanProducts(accepted), skipped };
 }
 
 function monitorErrorContext(error: unknown) {

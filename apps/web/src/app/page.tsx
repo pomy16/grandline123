@@ -12,6 +12,7 @@ import { ErrorState, LoadingState } from "../components/ui/data-state";
 import { apiFetch } from "../lib/api-client";
 import type { DashboardSummary } from "../lib/api";
 import { formatDateTime } from "../lib/format";
+import { wouldSkipProductNow } from "../lib/product-quality";
 
 const emptySummary: DashboardSummary = {
   totalStores: 0,
@@ -132,16 +133,26 @@ export default function DashboardPage() {
             <CardContent className="space-y-4">
               {loading ? <LoadingState label="Loading latest events..." /> : null}
               {summary.latestEvents.length === 0 && !loading ? <div className="text-sm text-muted-foreground">No events yet. Run a manual scan from Stores.</div> : null}
-              {summary.latestEvents.map((event) => (
-                <div key={event.id} className="rounded-md border border-border bg-background p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <Badge tone="info">{event.type}</Badge>
-                    <span className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)}</span>
+              {summary.latestEvents.map((event) => {
+                const wouldSkipNow = wouldSkipProductNow(event.product);
+
+                return (
+                  <div key={event.id} className="rounded-md border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge tone="info">{event.type}</Badge>
+                      <span className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)}</span>
+                    </div>
+                    <div className="mt-2 text-sm font-medium">{event.product.title}</div>
+                    <div className="text-xs text-muted-foreground">{event.product.store.name}</div>
+                    {wouldSkipNow ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge tone="warning">Would skip now</Badge>
+                        <span className="text-xs text-muted-foreground">Current filter would block this historical event.</span>
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="mt-2 text-sm font-medium">{event.product.title}</div>
-                  <div className="text-xs text-muted-foreground">{event.product.store.name}</div>
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
         </div>

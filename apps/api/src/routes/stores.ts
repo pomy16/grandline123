@@ -2,6 +2,8 @@ import { Router } from "express";
 import { MonitorMode, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { scanQueue } from "../lib/queue";
+import { addScanSourceUrl, isSafeScanSourceUrl, promotePrimarySourceUrl, removeScanSourceUrl } from "../services/source-candidates";
+import { bestSourceCandidate, enrichSourceCandidates, sourceHealthSummary } from "../services/source-health";
 
 export const storesRouter = Router();
 
@@ -50,6 +52,51 @@ function storePayload(body: Record<string, unknown>) {
   };
 }
 
+function validateStoreInput(body: Record<string, unknown>) {
+  const errors: string[] = [];
+  const baseUrl = String(body.baseUrl ?? "");
+  const listingUrls = parseStringList(body.listingUrls);
+
+  if (!String(body.name ?? "").trim()) errors.push("Store name is required.");
+  try {
+    const parsedBase = new URL(baseUrl);
+    if (!["http:", "https:"].includes(parsedBase.protocol)) errors.push("Base URL must use http or https.");
+  } catch {
+    errors.push("Base URL must be a valid URL.");
+  }
+
+  if (listingUrls.length === 0) errors.push("At least one listing URL is required.");
+  for (const url of listingUrls) {
+    if (!isSafeScanSourceUrl(url, baseUrl)) {
+      errors.push(`Listing URL is not safe as a scan source: ${url}`);
+    }
+  }
+
+  if (Number(body.pollingIntervalSeconds ?? 300) < 60) {
+    errors.push("Polling interval must be at least 60 seconds.");
+  }
+
+  return errors;
+}
+
+function withSourceHealth<T extends { baseUrl: string; mode: MonitorMode; listingUrls: string[]; sourceCandidates?: unknown[] }>(store: T) {
+  const sourceCandidates = (store.sourceCandidates ?? []) as Array<{
+    id: string;
+    url: string;
+    status: string;
+    monitorMode: MonitorMode;
+    productsFound: number;
+    metadata?: unknown;
+    reason?: string | null;
+  }>;
+  const sourceStore = { baseUrl: store.baseUrl, mode: store.mode, listingUrls: store.listingUrls };
+  return {
+    ...store,
+    sourceCandidates: enrichSourceCandidates(sourceCandidates, sourceStore),
+    sourceHealth: sourceHealthSummary(sourceCandidates, sourceStore)
+  };
+}
+
 storesRouter.get("/", async (request, response) => {
   const { page, pageSize, skip } = pagination(request.query);
   const sortBy = typeof request.query.sortBy === "string" && storeSortFields.has(request.query.sortBy) ? request.query.sortBy : "createdAt";
@@ -73,18 +120,19 @@ storesRouter.get("/", async (request, response) => {
     prisma.store.findMany({
       where,
       orderBy: { [sortBy]: sortOrder },
-      include: { discordWebhook: true, sourceCandidates: { take: 3, orderBy: [{ status: "asc" }, { updatedAt: "desc" }] }, _count: { select: { products: true, scanJobs: true, sourceCandidates: true } } },
+      include: { discordWebhook: true, sourceCandidates: { orderBy: [{ status: "asc" }, { updatedAt: "desc" }] }, _count: { select: { products: true, scanJobs: true, sourceCandidates: true } } },
       skip,
       take: pageSize
     }),
     prisma.store.count({ where })
   ]);
-  response.json({ data: stores, meta: { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) } });
+  response.json({ data: stores.map(withSourceHealth), meta: { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) } });
 });
 
 storesRouter.post("/", async (request, response) => {
-  if (!request.body.name || !request.body.baseUrl) {
-    response.status(400).json({ error: "Store name and base URL are required." });
+  const validationErrors = validateStoreInput(request.body);
+  if (validationErrors.length > 0) {
+    response.status(400).json({ error: validationErrors.join(" ") });
     return;
   }
 
@@ -100,7 +148,7 @@ storesRouter.get("/:id", async (request, response) => {
     include: {
       products: { take: 20, orderBy: { lastSeenAt: "desc" } },
       scanJobs: { take: 20, orderBy: { createdAt: "desc" } },
-      sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] },
+      sourceCandidates: { orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] },
       discordWebhook: true
     }
   });
@@ -108,10 +156,16 @@ storesRouter.get("/:id", async (request, response) => {
     response.status(404).json({ error: "Store not found." });
     return;
   }
-  response.json({ data: store });
+  response.json({ data: withSourceHealth(store) });
 });
 
 storesRouter.patch("/:id", async (request, response) => {
+  const validationErrors = validateStoreInput(request.body);
+  if (validationErrors.length > 0) {
+    response.status(400).json({ error: validationErrors.join(" ") });
+    return;
+  }
+
   const store = await prisma.store.update({
     where: { id: request.params.id },
     data: storePayload(request.body)
@@ -167,22 +221,37 @@ storesRouter.post("/:id/discover", async (request, response) => {
 });
 
 storesRouter.post("/:id/source-candidates/:candidateId/promote", async (request, response) => {
-  const candidate = await prisma.sourceCandidate.findFirst({
-    where: { id: request.params.candidateId, storeId: request.params.id }
-  });
+  const [candidate, currentStore] = await Promise.all([
+    prisma.sourceCandidate.findFirst({
+      where: { id: request.params.candidateId, storeId: request.params.id }
+    }),
+    prisma.store.findUnique({ where: { id: request.params.id } })
+  ]);
   if (!candidate) {
     response.status(404).json({ error: "Source candidate not found." });
+    return;
+  }
+  if (!currentStore) {
+    response.status(404).json({ error: "Store not found." });
     return;
   }
   if (candidate.status !== "ACTIVE") {
     response.status(400).json({ error: "Only active source candidates can be promoted." });
     return;
   }
+  if (!isSafeScanSourceUrl(candidate.url, currentStore.baseUrl)) {
+    response.status(400).json({ error: "This candidate URL is not safe as a scan source." });
+    return;
+  }
+  const listingUrls =
+    candidate.monitorMode === currentStore.mode
+      ? promotePrimarySourceUrl(currentStore.listingUrls, candidate.url, currentStore.baseUrl)
+      : [candidate.url];
 
   const store = await prisma.store.update({
     where: { id: request.params.id },
     data: {
-      listingUrls: [candidate.url],
+      listingUrls,
       mode: candidate.monitorMode,
       lastError: null,
       repeatedFailureCount: 0,
@@ -194,6 +263,124 @@ storesRouter.post("/:id/source-candidates/:candidateId/promote", async (request,
         }
       }
     },
+    include: { sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] } }
+  });
+  response.json({ data: store });
+});
+
+storesRouter.post("/:id/source-candidates/promote-best", async (request, response) => {
+  const currentStore = await prisma.store.findUnique({
+    where: { id: request.params.id },
+    include: { sourceCandidates: true }
+  });
+  if (!currentStore) {
+    response.status(404).json({ error: "Store not found." });
+    return;
+  }
+
+  const candidate = bestSourceCandidate(currentStore.sourceCandidates, currentStore);
+  if (!candidate) {
+    response.status(400).json({ error: "No safe validated source candidate is available to promote." });
+    return;
+  }
+  if (!isSafeScanSourceUrl(candidate.url, currentStore.baseUrl)) {
+    response.status(400).json({ error: "Best candidate URL is not safe as a scan source." });
+    return;
+  }
+
+  const listingUrls =
+    candidate.monitorMode === currentStore.mode
+      ? promotePrimarySourceUrl(currentStore.listingUrls, candidate.url, currentStore.baseUrl)
+      : [candidate.url];
+
+  const store = await prisma.store.update({
+    where: { id: request.params.id },
+    data: {
+      listingUrls,
+      mode: candidate.monitorMode,
+      lastError: null,
+      repeatedFailureCount: 0,
+      autoPausedAfterFailures: false,
+      sourceCandidates: {
+        update: {
+          where: { id: candidate.id },
+          data: { promotedAt: new Date() }
+        }
+      }
+    },
+    include: { sourceCandidates: { orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] } }
+  });
+  response.json({ data: withSourceHealth(store), promotedCandidateId: candidate.id, recommendation: candidate.recommendation });
+});
+
+storesRouter.post("/:id/source-candidates/:candidateId/activate", async (request, response) => {
+  const [candidate, currentStore] = await Promise.all([
+    prisma.sourceCandidate.findFirst({
+      where: { id: request.params.candidateId, storeId: request.params.id }
+    }),
+    prisma.store.findUnique({ where: { id: request.params.id } })
+  ]);
+  if (!candidate) {
+    response.status(404).json({ error: "Source candidate not found." });
+    return;
+  }
+  if (!currentStore) {
+    response.status(404).json({ error: "Store not found." });
+    return;
+  }
+  if (candidate.status !== "ACTIVE") {
+    response.status(400).json({ error: "Only active source candidates can be added as scan sources." });
+    return;
+  }
+  if (!isSafeScanSourceUrl(candidate.url, currentStore.baseUrl)) {
+    response.status(400).json({ error: "This candidate URL is not safe as a scan source." });
+    return;
+  }
+  if (candidate.monitorMode !== currentStore.mode) {
+    response.status(400).json({ error: "Candidate monitor mode must match the store mode before it can be added as an extra scan source." });
+    return;
+  }
+
+  const store = await prisma.store.update({
+    where: { id: request.params.id },
+    data: {
+      listingUrls: addScanSourceUrl(currentStore.listingUrls, candidate.url, currentStore.baseUrl),
+      lastError: null,
+      repeatedFailureCount: 0,
+      autoPausedAfterFailures: false
+    },
+    include: { sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] } }
+  });
+  response.json({ data: store });
+});
+
+storesRouter.post("/:id/source-candidates/:candidateId/deactivate", async (request, response) => {
+  const [candidate, currentStore] = await Promise.all([
+    prisma.sourceCandidate.findFirst({
+      where: { id: request.params.candidateId, storeId: request.params.id }
+    }),
+    prisma.store.findUnique({ where: { id: request.params.id } })
+  ]);
+  if (!candidate) {
+    response.status(404).json({ error: "Source candidate not found." });
+    return;
+  }
+  if (!currentStore) {
+    response.status(404).json({ error: "Store not found." });
+    return;
+  }
+
+  let listingUrls: string[];
+  try {
+    listingUrls = removeScanSourceUrl(currentStore.listingUrls, candidate.url, currentStore.baseUrl);
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : "Scan source could not be removed." });
+    return;
+  }
+
+  const store = await prisma.store.update({
+    where: { id: request.params.id },
+    data: { listingUrls },
     include: { sourceCandidates: { take: 25, orderBy: [{ status: "asc" }, { productsFound: "desc" }, { updatedAt: "desc" }] } }
   });
   response.json({ data: store });

@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { formatDateTime, formatMoney } from "../lib/format";
+import { wouldSkipProductNow } from "../lib/product-quality";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { EmptyState, LoadingState } from "./ui/data-state";
@@ -12,6 +13,7 @@ export type DashboardProductRow = {
   currency: string;
   stockStatus: string;
   game: string;
+  category?: string | null;
   lastSeenAt: string;
   store: { name: string };
 };
@@ -42,26 +44,38 @@ export function DashboardProductTable({ rows, loading }: { rows: DashboardProduc
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-border/60">
-              <td className="max-w-md py-3 pr-4 font-medium">{row.title}</td>
-              <td className="py-3 pr-4 text-muted-foreground">{row.store.name}</td>
-              <td className="py-3 pr-4">
-                <Badge tone="info">{row.game}</Badge>
-              </td>
-              <td className="py-3 pr-4">{formatMoney(row.price, row.currency)}</td>
-              <td className="py-3 pr-4">
-                <Badge tone={stockTone(row.stockStatus)}>{row.stockStatus}</Badge>
-              </td>
-              <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(row.lastSeenAt)}</td>
-              <td className="py-3 text-right">
-                <Button type="button" variant="secondary" onClick={() => window.open(row.url, "_blank", "noopener,noreferrer")}>
-                  <ExternalLink size={16} aria-hidden />
-                  Open
-                </Button>
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const wouldSkipNow = wouldSkipProductNow(row);
+
+            return (
+              <tr key={row.id} className="border-b border-border/60">
+                <td className="max-w-md py-3 pr-4">
+                  <div className="font-medium">{row.title}</div>
+                  {wouldSkipNow ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge tone="warning">Would skip now</Badge>
+                      <span className="text-xs text-muted-foreground">Current filter would block this product.</span>
+                    </div>
+                  ) : null}
+                </td>
+                <td className="py-3 pr-4 text-muted-foreground">{row.store.name}</td>
+                <td className="py-3 pr-4">
+                  <Badge tone="info">{row.game}</Badge>
+                </td>
+                <td className="py-3 pr-4">{formatMoney(row.price, row.currency)}</td>
+                <td className="py-3 pr-4">
+                  <Badge tone={stockTone(row.stockStatus)}>{row.stockStatus}</Badge>
+                </td>
+                <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(row.lastSeenAt)}</td>
+                <td className="py-3 text-right">
+                  <Button type="button" variant="secondary" onClick={() => window.open(row.url, "_blank", "noopener,noreferrer")}>
+                    <ExternalLink size={16} aria-hidden />
+                    Open
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

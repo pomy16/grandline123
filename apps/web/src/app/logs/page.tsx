@@ -13,6 +13,7 @@ import { Input } from "../../components/ui/input";
 import { Pagination } from "../../components/ui/pagination";
 import { apiFetch } from "../../lib/api-client";
 import { formatDateTime, formatDuration, type PageMeta } from "../../lib/format";
+import { wouldSkipProductNow } from "../../lib/product-quality";
 
 type ScanLog = {
   id: string;
@@ -44,7 +45,7 @@ type NotificationLog = {
   response?: unknown;
   sentAt?: string | null;
   createdAt: string;
-  product?: { title: string; store: { name: string } } | null;
+  product?: { title: string; game: string; category?: string | null; store: { name: string } } | null;
   event?: { type: string } | null;
 };
 
@@ -68,6 +69,20 @@ function statusTone(status: string) {
   if (status === "FAILED") return "danger";
   if (status === "SKIPPED") return "default";
   return "warning";
+}
+
+function notificationRoute(response: unknown) {
+  if (!response || typeof response !== "object" || Array.isArray(response)) return null;
+  const route = (response as Record<string, unknown>).route;
+  if (!route || typeof route !== "object" || Array.isArray(route)) return null;
+  return route as {
+    reason?: string;
+    webhookName?: string;
+    storeFirst?: boolean;
+    multiRouteHighPriority?: boolean;
+    storeWebhookConfigured?: boolean;
+    routeKind?: string;
+  };
 }
 
 export default function LogsPage() {
@@ -332,22 +347,47 @@ export default function LogsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {notifications.map((notification) => (
-                            <tr key={notification.id} className="border-b border-border/60 align-top">
-                              <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(notification.createdAt)}</td>
-                              <td className="py-3 pr-4">{notification.target}</td>
-                              <td className="py-3 pr-4">
-                                <Badge tone={statusTone(notification.status)}>{notification.status}</Badge>
-                              </td>
-                              <td className="py-3 pr-4">{notification.event?.type ?? "TEST"}</td>
-                              <td className="py-3 pr-4">
-                                <div>{notification.product?.title ?? "-"}</div>
-                                <div className="text-xs text-muted-foreground">{notification.product?.store.name ?? ""}</div>
-                              </td>
-                              <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(notification.sentAt)}</td>
-                              <td className="max-w-md py-3 pr-4 text-muted-foreground">{notification.error ?? "-"}</td>
-                            </tr>
-                          ))}
+                          {notifications.map((notification) => {
+                            const wouldSkipNow = notification.product ? wouldSkipProductNow(notification.product) : false;
+                            const route = notificationRoute(notification.response);
+
+                            return (
+                              <tr key={notification.id} className="border-b border-border/60 align-top">
+                                <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(notification.createdAt)}</td>
+                                <td className="py-3 pr-4">{notification.target}</td>
+                                <td className="py-3 pr-4">
+                                  <Badge tone={statusTone(notification.status)}>{notification.status}</Badge>
+                                </td>
+                                <td className="py-3 pr-4">{notification.event?.type ?? "TEST"}</td>
+                                <td className="py-3 pr-4">
+                                  <div>{notification.product?.title ?? "-"}</div>
+                                  <div className="text-xs text-muted-foreground">{notification.product?.store.name ?? ""}</div>
+                                  {route ? (
+                                    <div className="mt-2 space-y-1">
+                                      <div className="flex flex-wrap gap-1">
+                                        {route.storeFirst ? <Badge tone="success">Store-first</Badge> : <Badge tone="default">Fallback</Badge>}
+                                        {route.multiRouteHighPriority ? <Badge tone="warning">Multi-route high</Badge> : null}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {route.webhookName ? `${route.webhookName}: ` : ""}
+                                        {route.reason ?? "Routing diagnostics recorded."}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {wouldSkipNow ? (
+                                    <div className="mt-2 space-y-1">
+                                      <Badge tone="warning">Would skip now</Badge>
+                                      <div className="text-xs text-muted-foreground">
+                                        Current sealed TCG filter would block this historical alert.
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </td>
+                                <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(notification.sentAt)}</td>
+                                <td className="max-w-md py-3 pr-4 text-muted-foreground">{notification.error ?? "-"}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
