@@ -70,6 +70,52 @@ export default function DashboardPage() {
           <MetricCard label="Price signals" value="Ready" icon={CircleDollarSign} />
         </div>
 
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Product quality</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="success">Sealed TCG only</Badge>
+                <Badge tone="info">Source/Product split</Badge>
+              </div>
+              <p className="leading-6 text-muted-foreground">
+                Discovery can keep category pages as source candidates, but Products and Discord alerts are limited to validated relevant sealed Pokemon TCG and One Piece Card Game items.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Discord routing</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="success">Store-first</Badge>
+                <Badge tone="default">High copy off</Badge>
+              </div>
+              <p className="leading-6 text-muted-foreground">
+                Store-specific webhooks stay primary. High-priority copies are sent only when <span className="font-mono">DISCORD_MULTI_ROUTE_HIGH_PRIORITY</span> is enabled.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Discovery workflow</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="info">Discover</Badge>
+                <Badge tone="info">Promote</Badge>
+                <Badge tone="info">Scan</Badge>
+              </div>
+              <p className="leading-6 text-muted-foreground">
+                Run discovery, promote a validated source, then scan. Blocked or empty sources stay visible with reasons so they can be reviewed without noisy alerts.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
           <Card>
             <CardHeader>

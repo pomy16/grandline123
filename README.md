@@ -207,6 +207,40 @@ docker-compose.yml
 - Discovery and Playwright rendering still respect robots.txt and normal HTTP status handling; blocked sources fail safely instead of being bypassed.
 - Discord delivery now throttles sends per webhook route and retries HTTP 429 responses using Discord retry hints.
 
+## Imported Reference Bot Ideas
+
+A second personal bot/reference dashboard was reviewed for safe ideas. The useful parts imported into this project are UI and diagnostics only:
+
+- clearer store/source health summaries
+- source candidate counts split into raw extracted, relevant validated, and skipped entries
+- stronger visual hierarchy for `Discover`, `Promote`, `Scan`, `Resume`, and `Pause` workflows
+- visible store-first Discord routing status
+- clearer Logs guidance for scan diagnostics and Discord delivery history
+- dashboard guardrails for sealed TCG relevance, source/product separation, and safe manual purchase-assist behavior
+
+The reference bot's scrapers, scheduler, SQLite schema, direct Discord routing map, and any fetching behavior were not copied. This project keeps the existing Prisma/API/worker architecture, safe monitor adapters, strict webhook masking, store-first routing, sealed TCG relevance filtering, and no-checkout/no-purchase automation policy.
+
+## Source Candidate Workflow
+
+`SourceCandidate`, `Product`, and `publicCartUrl` are intentionally separate:
+
+- `SourceCandidate` can be a category, listing, search, publisher, sitemap, RSS, API, or rendered public page used to discover products.
+- `Product` must be a validated real product detail/card with a meaningful title, product-specific URL, and strong product evidence.
+- `publicCartUrl` is only an optional manual purchase-assist shortcut. It is never scanned automatically and never replaces the product URL.
+
+The Stores page shows each candidate's:
+
+- status (`Target found`, `Needs attention`, `Empty`, or pending)
+- raw extracted candidate count
+- relevant validated product count
+- skipped non-product/non-target count
+- reason or blocker
+- whether it is the current primary source
+
+Discovery can keep category/listing URLs as candidates, but those URLs are rejected as Product records unless a real product card/detail is validated. A candidate is considered a target only when relevant sealed TCG products pass validation.
+
+Multiple useful source candidates per store are expected, for example separate booster, publisher, and sorted listing pages. The current safe behavior still scans one promoted primary source per store. Full multiple-active-candidate scanning is planned, but should be implemented with database support for per-candidate enablement, worker-level product identity deduplication, and notification deduplication so one product cannot create duplicate events or Discord alerts across sources.
+
 ## Environment Variables
 
 Copy the example file:

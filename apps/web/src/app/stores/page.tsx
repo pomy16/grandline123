@@ -77,6 +77,7 @@ type SourceCandidate = {
   productsFound: number;
   reason?: string | null;
   discoveredFrom?: string | null;
+  metadata?: unknown;
   lastCheckedAt?: string | null;
   promotedAt?: string | null;
 };
@@ -151,6 +152,60 @@ function candidateTone(status: string) {
   return "info" as const;
 }
 
+function metadataNumber(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const value = (metadata as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function metadataArrayLength(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const value = (metadata as Record<string, unknown>)[key];
+  return Array.isArray(value) ? value.length : undefined;
+}
+
+function candidateMetrics(candidate: SourceCandidate) {
+  const raw = metadataNumber(candidate.metadata, "rawProductCandidateCount") ?? metadataNumber(candidate.metadata, "rawCandidatesCount");
+  const validated =
+    metadataNumber(candidate.metadata, "validatedProductCount") ??
+    metadataNumber(candidate.metadata, "relevantProductCount") ??
+    candidate.productsFound;
+  const skippedNonProducts =
+    metadataNumber(candidate.metadata, "skippedNonProducts") ??
+    metadataNumber(candidate.metadata, "skippedNonProductCount") ??
+    metadataArrayLength(candidate.metadata, "skippedNonProductWarnings") ??
+    0;
+  const skippedNonTargets = metadataNumber(candidate.metadata, "skippedNonTargetProducts") ?? 0;
+  const skipped = skippedNonProducts + skippedNonTargets;
+  return { raw, validated, skipped, skippedNonProducts, skippedNonTargets };
+}
+
+function candidateStatusLabel(status: string) {
+  if (status === "ACTIVE") return "Target found";
+  if (status === "NEEDS_ATTENTION") return "Needs attention";
+  if (status === "EMPTY") return "Empty";
+  return status;
+}
+
+function candidateStatusDetail(candidate: SourceCandidate) {
+  const metrics = candidateMetrics(candidate);
+  if (candidate.status === "ACTIVE") return `Validated ${metrics.validated} relevant sealed TCG product${metrics.validated === 1 ? "" : "s"}.`;
+  if (candidate.status === "EMPTY") return "The source loaded, but no relevant sealed TCG products passed validation.";
+  if (candidate.status === "NEEDS_ATTENTION") return candidate.reason ?? "This source needs review before it should be promoted.";
+  return candidate.reason ?? "Candidate is waiting for another discovery pass.";
+}
+
+function sourceSummary(store: Pick<StoreRecord, "sourceCandidates" | "listingUrls">) {
+  const candidates = store.sourceCandidates ?? [];
+  const active = candidates.filter((candidate) => candidate.status === "ACTIVE").length;
+  const attention = candidates.filter((candidate) => candidate.status === "NEEDS_ATTENTION").length;
+  const empty = candidates.filter((candidate) => candidate.status === "EMPTY").length;
+  const primaryCount = candidates.filter((candidate) => candidate.promotedAt || store.listingUrls.includes(candidate.url)).length;
+  const relevantProducts = candidates.reduce((total, candidate) => total + candidateMetrics(candidate).validated, 0);
+  const skipped = candidates.reduce((total, candidate) => total + candidateMetrics(candidate).skipped, 0);
+  return { active, attention, empty, primaryCount, relevantProducts, skipped };
+}
+
 export default function StoresPage() {
   const [stores, setStores] = useState<StoreRecord[]>([]);
   const [webhooks, setWebhooks] = useState<DiscordWebhook[]>([]);
@@ -167,6 +222,7 @@ export default function StoresPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const selectedStore = useMemo(() => stores.find((store) => store.id === editingId), [editingId, stores]);
+  const selectedSummary = selectedDetail ? sourceSummary(selectedDetail) : null;
 
   const formErrors = useMemo(() => {
     const errors: Record<string, string | undefined> = {
@@ -511,6 +567,7 @@ export default function StoresPage() {
                               ["name", "Store"],
                               ["mode", "Mode"],
                               ["active", "Status"],
+                              ["sourceCandidates", "Sources"],
                               ["lastScanAt", "Last scan"],
                               ["nextScanAt", "Next scan"],
                               ["webhook", "Webhook"],
@@ -518,9 +575,9 @@ export default function StoresPage() {
                               ["products", "Products"]
                             ].map(([field, label]) => (
                               <th key={field} className="py-3 pr-4 font-medium">
-                                <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => !["products", "webhook"].includes(field) && toggleSort(field)} disabled={["products", "webhook"].includes(field)}>
+                                <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => !["products", "webhook", "sourceCandidates"].includes(field) && toggleSort(field)} disabled={["products", "webhook", "sourceCandidates"].includes(field)}>
                                   {label}
-                                  {!["products", "webhook"].includes(field) ? <ArrowDownUp size={13} aria-hidden /> : null}
+                                  {!["products", "webhook", "sourceCandidates"].includes(field) ? <ArrowDownUp size={13} aria-hidden /> : null}
                                 </button>
                               </th>
                             ))}
@@ -530,6 +587,7 @@ export default function StoresPage() {
                         <tbody>
                           {stores.map((store) => {
                             const status = storeStatus(store);
+                            const summary = sourceSummary(store);
                             return (
                               <tr key={store.id} className="border-b border-border/60 align-top">
                                 <td className="py-3 pr-4">
@@ -549,13 +607,27 @@ export default function StoresPage() {
                                   {store.averageScanDurationMs ? <div className="mt-1 text-xs text-muted-foreground">Avg {formatDuration(store.averageScanDurationMs)}</div> : null}
                                   {store._count?.sourceCandidates ? <div className="mt-1 text-xs text-muted-foreground">Candidates: {store._count.sourceCandidates}</div> : null}
                                 </td>
+                                <td className="py-3 pr-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {summary.primaryCount > 0 ? <Badge tone="success">Primary set</Badge> : <Badge tone="default">No primary</Badge>}
+                                    {summary.active > 0 ? <Badge tone="success">{summary.active} target</Badge> : null}
+                                    {summary.attention > 0 ? <Badge tone="warning">{summary.attention} review</Badge> : null}
+                                    {summary.empty > 0 ? <Badge tone="default">{summary.empty} empty</Badge> : null}
+                                  </div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    Relevant: {summary.relevantProducts} · Skipped: {summary.skipped}
+                                  </div>
+                                </td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.lastScanAt)}</td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.nextScanAt)}</td>
                                 <td className="py-3 pr-4">
                                   {store.discordWebhook ? (
                                     <div className="space-y-1">
                                       <div className="font-medium">{store.discordWebhook.name}</div>
-                                      <Badge tone={store.discordWebhook.active ? "info" : "default"}>{store.discordWebhook.active ? store.discordWebhook.target : "Paused webhook"}</Badge>
+                                      <div className="flex flex-wrap gap-1">
+                                        <Badge tone={store.discordWebhook.active ? "success" : "default"}>{store.discordWebhook.active ? "Store-first" : "Paused webhook"}</Badge>
+                                        <Badge tone="info">{store.discordWebhook.target}</Badge>
+                                      </div>
                                     </div>
                                   ) : (
                                     <span className="text-muted-foreground">Fallback routing</span>
@@ -674,6 +746,72 @@ export default function StoresPage() {
             {selectedDetail ? (
               <Card>
                 <CardHeader>
+                  <CardTitle>{selectedDetail.name} source and routing status</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 text-sm lg:grid-cols-3">
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium">Source health</div>
+                      <Badge tone={selectedSummary && selectedSummary.active > 0 ? "success" : selectedSummary && selectedSummary.attention > 0 ? "warning" : "default"}>
+                        {selectedSummary && selectedSummary.active > 0 ? "Target found" : selectedSummary && selectedSummary.attention > 0 ? "Review" : "Waiting"}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-md bg-muted p-2">
+                        <div className="text-lg font-semibold">{selectedSummary?.active ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Targets</div>
+                      </div>
+                      <div className="rounded-md bg-muted p-2">
+                        <div className="text-lg font-semibold">{selectedSummary?.attention ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Review</div>
+                      </div>
+                      <div className="rounded-md bg-muted p-2">
+                        <div className="text-lg font-semibold">{selectedSummary?.empty ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Empty</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 break-all text-xs text-muted-foreground">
+                      Primary source: {selectedDetail.listingUrls[0] ? truncateMiddle(selectedDetail.listingUrls[0], 92) : "not set"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium">Product quality</div>
+                      <Badge tone="info">Sealed TCG filter</Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                      <div className="rounded-md bg-muted p-2">
+                        <div className="text-lg font-semibold">{selectedSummary?.relevantProducts ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Relevant found</div>
+                      </div>
+                      <div className="rounded-md bg-muted p-2">
+                        <div className="text-lg font-semibold">{selectedSummary?.skipped ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">Skipped</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Accessories, labels, articles, profiles, and category pages stay out of Products, Events, and Discord alerts.
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium">Discord routing</div>
+                      <Badge tone={selectedDetail.discordWebhook?.active ? "success" : "default"}>{selectedDetail.discordWebhook?.active ? "Store-first" : "Fallback"}</Badge>
+                    </div>
+                    <div className="mt-3 text-sm">
+                      {selectedDetail.discordWebhook?.active ? selectedDetail.discordWebhook.name : "No active store-specific webhook"}
+                    </div>
+                    <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                      High-priority copy is off by default with <span className="font-mono">DISCORD_MULTI_ROUTE_HIGH_PRIORITY=false</span>. Store alerts stay in the store channel unless multi-route is enabled.
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {selectedDetail ? (
+              <Card>
+                <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle>{selectedDetail.name} scan history</CardTitle>
                     <Button type="button" variant="secondary" onClick={() => loadStoreDetail(selectedDetail.id)} disabled={detailLoading}>
@@ -725,31 +863,62 @@ export default function StoresPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {selectedDetail.sourceCandidates.length === 0 ? <EmptyState title="No source candidates yet" detail="Run a discovery scan to inspect public metadata, sitemaps, feeds, and rendered category pages." /> : null}
-                  {selectedDetail.sourceCandidates.map((candidate) => (
-                    <div key={candidate.id} className="rounded-md border border-border bg-background p-3 text-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge tone={candidateTone(candidate.status)}>{candidate.status === "ACTIVE" ? "Target found" : candidate.status}</Badge>
-                            <Badge tone="info">{candidate.monitorMode}</Badge>
-                            <Badge tone="default">{candidate.kind}</Badge>
-                            {candidate.promotedAt ? <Badge tone="success">Primary</Badge> : null}
+                  {selectedDetail.sourceCandidates.map((candidate) => {
+                    const metrics = candidateMetrics(candidate);
+                    const isPrimary = candidate.promotedAt || selectedDetail.listingUrls.includes(candidate.url);
+                    return (
+                      <div key={candidate.id} className="rounded-md border border-border bg-background p-3 text-sm">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge tone={candidateTone(candidate.status)}>{candidateStatusLabel(candidate.status)}</Badge>
+                              <Badge tone="info">{candidate.monitorMode}</Badge>
+                              <Badge tone="default">{candidate.kind}</Badge>
+                              {isPrimary ? <Badge tone="success">Primary source</Badge> : null}
+                            </div>
+                            <div className="mt-2 break-all font-mono text-xs text-muted-foreground">{candidate.url}</div>
+                            <div className="mt-2 text-xs text-muted-foreground">{candidateStatusDetail(candidate)}</div>
                           </div>
-                          <div className="mt-2 break-all font-mono text-xs text-muted-foreground">{candidate.url}</div>
+                          <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE"} onClick={() => promoteCandidate(selectedDetail.id, candidate.id)}>
+                            <CheckCircle2 size={16} aria-hidden />
+                            Promote primary
+                          </Button>
                         </div>
-                        <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE"} onClick={() => promoteCandidate(selectedDetail.id, candidate.id)}>
-                          <CheckCircle2 size={16} aria-hidden />
-                          Promote
-                        </Button>
+                        <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-2 xl:grid-cols-5">
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Relevant products</div>
+                            <div className="mt-1 font-medium text-foreground">{metrics.validated}</div>
+                          </div>
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Raw extracted</div>
+                            <div className="mt-1 font-medium text-foreground">{metrics.raw ?? "-"}</div>
+                          </div>
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Skipped</div>
+                            <div className="mt-1 font-medium text-foreground">{metrics.skipped}</div>
+                          </div>
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Checked</div>
+                            <div className="mt-1 text-xs text-foreground">{formatDateTime(candidate.lastCheckedAt)}</div>
+                          </div>
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Discovered from</div>
+                            <div className="mt-1 break-all text-xs text-foreground">{candidate.discoveredFrom ? truncateMiddle(candidate.discoveredFrom, 80) : "-"}</div>
+                          </div>
+                        </div>
+                        {candidate.reason ? (
+                          <div className="mt-3 rounded-md border border-border bg-muted p-2 text-xs leading-5 text-muted-foreground">
+                            {candidate.reason}
+                          </div>
+                        ) : null}
+                        {candidate.status === "ACTIVE" && !isPrimary ? (
+                          <div className="mt-3 text-xs text-muted-foreground">
+                            This candidate is validated and can be promoted. Multiple active candidate scanning is planned, but this release keeps one primary scan source to avoid duplicate alerts.
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-3">
-                        <div>Products: {candidate.productsFound}</div>
-                        <div>Checked: {formatDateTime(candidate.lastCheckedAt)}</div>
-                        <div className="break-all">From: {candidate.discoveredFrom ? truncateMiddle(candidate.discoveredFrom, 80) : "-"}</div>
-                      </div>
-                      {candidate.reason ? <div className="mt-2 text-muted-foreground">{candidate.reason}</div> : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
             ) : null}
