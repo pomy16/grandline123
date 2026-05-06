@@ -6,6 +6,7 @@ import type { Product, Store } from "@prisma/client";
 import { createMonitor } from "../monitors";
 import { prisma } from "../prisma";
 import { MonitorRequestError } from "../http/safe-http-client";
+import { pageExtractionDiagnostics } from "../monitors/page-diagnostics";
 import { workerConfig } from "../config";
 import { assertNoMockProductsForRealStore } from "./monitor-safety";
 import { actionableNotificationSkipReason, notifyProductEvent } from "./notifications";
@@ -368,6 +369,7 @@ export async function scanStore(storeId: string, scanJobId?: string) {
     const rawProducts = await monitor.scan(toStoreConfig(store));
     const relevance = filterRelevantScanProducts(rawProducts);
     const products = await applyKeywordRules(relevance.accepted);
+    const pageDiagnostics = pageExtractionDiagnostics(rawProducts);
     assertNoMockProductsForRealStore(store, products);
     const parserWarnings = "warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.slice(0, 20) : [];
     let eventsCreated = 0;
@@ -391,6 +393,9 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           scanSources: store.listingUrls,
           rawProductCount: rawProducts.length,
           rawFound: rawProducts.length,
+          pageReportedCounts: pageDiagnostics.pageReportedCounts,
+          pageExtractionWarnings: pageDiagnostics.pageExtractionWarnings,
+          pageReportedCount: pageDiagnostics.pageReportedCounts[0]?.pageReportedCount ?? null,
           productCount: products.length,
           relevantFound: products.length,
           inStockRelevantFound,
@@ -423,6 +428,22 @@ export async function scanStore(storeId: string, scanJobId?: string) {
           severity: "WARN",
           message: `${store.mode} parser skipped non-product URLs for ${store.name}.`,
           context: { mode: store.mode, monitorMode: store.mode, parserWarnings } as Prisma.InputJsonValue
+        }
+      });
+    }
+
+    if (pageDiagnostics.pageExtractionWarnings.length > 0) {
+      await prisma.scanLog.create({
+        data: {
+          storeId: store.id,
+          severity: "WARN",
+          message: `${store.mode} source likely paginated or parser sees only current page for ${store.name}.`,
+          context: {
+            mode: store.mode,
+            monitorMode: store.mode,
+            pageReportedCounts: pageDiagnostics.pageReportedCounts,
+            pageExtractionWarnings: pageDiagnostics.pageExtractionWarnings
+          } as Prisma.InputJsonValue
         }
       });
     }
@@ -493,6 +514,9 @@ export async function scanStore(storeId: string, scanJobId?: string) {
       scanSources: store.listingUrls,
       rawProductCount: rawProducts.length,
       rawFound: rawProducts.length,
+      pageReportedCounts: pageDiagnostics.pageReportedCounts,
+      pageExtractionWarnings: pageDiagnostics.pageExtractionWarnings,
+      pageReportedCount: pageDiagnostics.pageReportedCounts[0]?.pageReportedCount ?? null,
       skippedNonTargetCount: relevance.skipped.length,
       skippedCount: relevance.skipped.length,
       skippedByReason: countByReason(relevance.skipped),

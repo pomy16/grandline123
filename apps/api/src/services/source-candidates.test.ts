@@ -14,6 +14,15 @@ describe("source candidate scan source helpers", () => {
     ]);
   });
 
+  it("preserves query params and hash fragments for source URLs", () => {
+    expect(addScanSourceUrl([], "/pokemon?in_stock=true&in_shop_stock=true", "https://www.najada.games")).toEqual([
+      "https://www.najada.games/pokemon?in_shop_stock=true&in_stock=true"
+    ]);
+    expect(addScanSourceUrl([], "/hracky/pokemon-karty/18879069.htm#f&pg=1&sc=531", "https://www.alza.cz")).toEqual([
+      "https://www.alza.cz/hracky/pokemon-karty/18879069.htm#f&pg=1&sc=531"
+    ]);
+  });
+
   it("promotes a source to the first scan URL while preserving the rest", () => {
     expect(
       promotePrimarySourceUrl(

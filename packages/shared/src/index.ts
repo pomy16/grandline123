@@ -100,6 +100,12 @@ export function normalizeUrl(url: string, baseUrl?: string): string {
   return parsed.toString();
 }
 
+export function normalizeSourceUrl(url: string, baseUrl?: string): string {
+  const parsed = new URL(url, baseUrl);
+  parsed.searchParams.sort();
+  return parsed.toString();
+}
+
 export function parsePrice(value: string): number | null {
   const normalized = value
     .replace(/\s/g, "")
@@ -173,6 +179,7 @@ const sealedTcgProductPatterns = [
   /\b2 pack blister\b/,
   /\bmini tin\b/,
   /\btin\b/,
+  /\bplechovk(a|y)\b/,
   /\bpoke ball tin\b/,
   /\bpokeball tin\b/,
   /\bpoke ball\b/,
@@ -206,6 +213,7 @@ const sourceContextSealedTcgProductPatterns = [
   /\b2 pack blister\b/,
   /\bmini tin\b/,
   /\btin\b/,
+  /\bplechovk(a|y)\b/,
   /\bpoke ball tin\b/,
   /\bpokeball tin\b/,
   /\bpoke ball\b/,

@@ -244,6 +244,10 @@ The Stores page shows each candidate's:
 
 Discovery can keep category/listing URLs as candidates, but those URLs are rejected as Product records unless a real product card/detail is validated. A candidate is considered a target only when relevant sealed TCG products pass validation.
 
+Product URLs are canonicalized without hash fragments because fragments are usually page-local UI state. SourceCandidate URLs are normalized separately and preserve query parameters plus hash fragments, so public filtered category URLs can remain scan sources when the filter is part of the source URL.
+
+Rendered pages with JSON-LD `ItemList` data are parsed by flattening nested `itemListElement -> item -> Product` entries before falling back to product-card anchors. This is important for stores such as Najáda where JSON-LD exposes product URL, price, image, SKU, and `schema.org/InStock` availability more reliably than the visible card anchor alone.
+
 Multiple useful source candidates per store are expected, for example separate booster, publisher, and sorted listing pages. The Stores UI supports adding validated candidates as extra scan sources when they use the same monitor mode as the store. The first URL remains the primary source for display and defaults; all URLs in `Store.listingUrls` are scanned by the existing monitor adapters and products are deduplicated by canonical URL before persistence. If a candidate uses a different monitor mode, promote it as primary to switch the store mode instead of mixing modes in one scan.
 
 The Stores detail view also includes a `Promote best safe source` action. It is explicit admin-only behavior: the app calculates the best safe validated candidate from relevant product count, skipped noise, URL safety, and monitor-mode fit, then promotes it only after you click and confirm. It does not auto-enable stores, bypass blocked pages, or change fetch behavior.
@@ -498,7 +502,7 @@ The seed links each preset to a store-specific Discord webhook only when a webho
 
 | Store | Webhook name | Source URL(s) | Mode | Interval | Tested status | Default |
 | --- | --- | --- | --- | --- | --- | --- |
-| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `PLAYWRIGHT` | 300s | needs attention / paused | paused |
+| Alza | `cz-alza` | `https://www.alza.cz/hracky/levne-pokemon-karty/18879069.htm` | `PLAYWRIGHT` | 300s | limited / needs attention / paused | paused |
 | Dráčik | `cz-dracik` | `https://www.dracik.cz/pokemon-karticky/` | `PLAYWRIGHT` | 180s | 0 products after cart URL safety fix / paused | paused |
 | Smarty | `cz-smarty` | `https://www.smarty.cz/pokemon-tcg-4c14578`, `https://www.smarty.cz/one-piece-tcg-4c14584` | `PLAYWRIGHT` | 180s | needs attention / paused | paused |
 | Pompo | `cz-pompo` | `https://pompo.cz/pokemon-tcg/` | `PLAYWRIGHT` | 300s | candidate URL / paused | paused |
@@ -510,7 +514,7 @@ The seed links each preset to a store-specific Discord webhook only when a webho
 | TCG Karty | `cz-tcgkarty` | `https://www.tcgkarty.cz/tcg-pokemon`, `https://www.tcgkarty.cz/tcg-one-piece` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
 | Gengar.cz | `cz-gengar` | `https://www.gengar.cz/pokemon`, `https://www.gengar.cz/one-piece` | `PLAYWRIGHT` | 180s | direct scan found relevant products; discovery timeout / paused | paused |
 | Hra na netu | `cz-hranane-tu` | `https://www.hrananetu.cz/kategorie-pokemon` | `PLAYWRIGHT` | 300s | candidate / paused | paused |
-| Najáda | `cz-najada` | `https://www.najada.games/pokemon`, `https://www.najada.games/en/pokemon/boosters`, `https://www.najada.games/en/card-games/one-piece` | `PLAYWRIGHT` | 180s | local preview found relevant products / paused | paused |
+| Najáda | `cz-najada` | `https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true`, `https://www.najada.games/pokemon`, `https://www.najada.games/en/pokemon/boosters`, `https://www.najada.games/en/card-games/one-piece` | `PLAYWRIGHT` | 180s | local preview found relevant products / paused | paused |
 | Professor Onyx | `cz-professor-onyx` | `https://www.professoronyx.com/boostery-2/`, `https://www.professoronyx.com/ostatni-karetni-hry/` | `PLAYWRIGHT` | 180s | local preview found relevant products / paused | paused |
 | Kuma | `cz-kuma` | `https://www.kuma.cz/pokemon-karty/`, `https://www.kuma.cz/boostery/` | `PLAYWRIGHT` | 300s | HTTP 429 during local preview / paused | paused |
 
@@ -649,6 +653,17 @@ From Stores, use `Discover` to queue a source discovery job. The worker checks:
 - public category links containing Pokemon, Pokémon, TCG, One Piece, or card keywords
 
 Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated relevant sealed TCG products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, publisher/listing pages, articles, external profiles, and accessories can remain source context or be skipped, but do not count as products and do not create events or Discord alerts.
+
+Scan and discovery diagnostics include page-level extraction signals when available:
+
+- `pageReportedCount`, for text such as `Nalezeno 103 výsledků`
+- `rawExtractedCount`
+- `relevantFound`
+- `inStockRelevantFound`
+- `skippedByReason`
+- a warning when a page likely needs pagination, lazy loading, or multiple active source candidates because the page reports much more than the parser extracted
+
+Alza may return HTTP 403 or a Cloudflare human-check page during public Playwright validation. That state is treated as `limited` / `needs attention`; the app must fail safely and must not bypass the block.
 
 Product title cleanup removes category badges, stock chips, load-more controls, duplicated price text, and store UI labels such as `Bestseller`, `Na prodejně`, `Skladem online`, and `DMOC`. The scanner then applies the sealed-product relevance filter before Product persistence, Event creation, and Discord delivery.
 

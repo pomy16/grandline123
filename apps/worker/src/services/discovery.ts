@@ -1,10 +1,11 @@
 import type { MonitorMode, Store } from "@prisma/client";
 import type { StoreConfig } from "@tcg-monitor/shared";
-import { inferGame, isRelevantTargetProduct, normalizeUrl } from "@tcg-monitor/shared";
+import { inferGame, isRelevantTargetProduct, normalizeSourceUrl } from "@tcg-monitor/shared";
 import { Prisma } from "@prisma/client";
 import { SafeHttpClient, MonitorRequestError } from "../http/safe-http-client";
 import { createMonitor } from "../monitors";
 import { productsFromHtmlDocument } from "../monitors/html-monitor";
+import { pageExtractionDiagnostics } from "../monitors/page-diagnostics";
 import { isValidSourceCandidateUrl } from "../monitors/parser-utils";
 import { prisma } from "../prisma";
 import { toStoreConfig } from "./store-config";
@@ -22,7 +23,7 @@ type CandidateInput = {
 
 function safeUrl(value: string, storeConfig: StoreConfig) {
   try {
-    const normalized = normalizeUrl(value, storeConfig.baseUrl);
+    const normalized = normalizeSourceUrl(value, storeConfig.baseUrl);
     if (!isValidSourceCandidateUrl(normalized, storeConfig)) return null;
     return normalized;
   } catch {
@@ -145,18 +146,21 @@ async function validateCandidate(storeConfig: StoreConfig, candidate: CandidateI
       listingUrls: [candidate.url]
     });
     const relevantProducts = products.filter(isRelevantTargetProduct);
+    const pageDiagnostics = pageExtractionDiagnostics(products);
     const skippedNonTargetProducts = products.length - relevantProducts.length;
     const skippedWarnings = ("warnings" in monitor && Array.isArray(monitor.warnings) ? monitor.warnings.length : 0) + skippedNonTargetProducts;
+    const pageWarningNote = pageDiagnostics.pageExtractionWarnings.length > 0 ? " Source likely paginated or parser sees only current page." : "";
     return {
       status: candidateStatusFromValidatedProducts(relevantProducts.length),
       productsFound: relevantProducts.length,
       rawProductsFound: products.length,
       skippedNonTargetProducts,
       skippedWarnings,
+      pageDiagnostics,
       reason:
         relevantProducts.length > 0
-          ? `Product source successfully extracted ${relevantProducts.length} relevant sealed TCG product(s) from ${products.length} raw product candidate(s).`
-          : `Page loaded, but no relevant sealed TCG products were extracted${skippedWarnings > 0 ? `; skipped ${skippedWarnings} non-product or non-target candidate(s)` : ""}.`
+          ? `Product source successfully extracted ${relevantProducts.length} relevant sealed TCG product(s) from ${products.length} raw product candidate(s).${pageWarningNote}`
+          : `Page loaded, but no relevant sealed TCG products were extracted${skippedWarnings > 0 ? `; skipped ${skippedWarnings} non-product or non-target candidate(s)` : ""}.${pageWarningNote}`
     };
   } catch (error) {
     return {
@@ -165,6 +169,7 @@ async function validateCandidate(storeConfig: StoreConfig, candidate: CandidateI
       rawProductsFound: 0,
       skippedNonTargetProducts: 0,
       skippedWarnings: 0,
+      pageDiagnostics: { pageReportedCounts: [], pageExtractionWarnings: [] },
       reason: errorReason(error)
     };
   }
@@ -219,7 +224,9 @@ export async function discoverStoreSources(storeId: string, scanJobId?: string) 
             rawProductCandidateCount: validation.rawProductsFound,
             validatedProductCount: validation.productsFound,
             skippedNonProductWarnings: validation.skippedWarnings,
-            skippedNonTargetProducts: validation.skippedNonTargetProducts
+            skippedNonTargetProducts: validation.skippedNonTargetProducts,
+            pageReportedCounts: validation.pageDiagnostics.pageReportedCounts,
+            pageExtractionWarnings: validation.pageDiagnostics.pageExtractionWarnings
           } as Prisma.InputJsonValue,
           lastCheckedAt: new Date()
         },
@@ -237,7 +244,9 @@ export async function discoverStoreSources(storeId: string, scanJobId?: string) 
             rawProductCandidateCount: validation.rawProductsFound,
             validatedProductCount: validation.productsFound,
             skippedNonProductWarnings: validation.skippedWarnings,
-            skippedNonTargetProducts: validation.skippedNonTargetProducts
+            skippedNonTargetProducts: validation.skippedNonTargetProducts,
+            pageReportedCounts: validation.pageDiagnostics.pageReportedCounts,
+            pageExtractionWarnings: validation.pageDiagnostics.pageExtractionWarnings
           } as Prisma.InputJsonValue,
           lastCheckedAt: new Date()
         }

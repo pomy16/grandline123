@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedProduct } from "@tcg-monitor/shared";
+import { pageExtractionDiagnostics } from "../monitors/page-diagnostics";
 import { dedupeScanProducts, detectEvents, filterRelevantScanProducts, mergeIncomingWithExisting, stateHash } from "./scanner";
 
 const incoming: NormalizedProduct = {
@@ -120,5 +121,21 @@ describe("scan event generation", () => {
       "https://example.com/one-piece-adventure-booster"
     ]);
     expect(deduped.find((product) => product.canonicalUrl.includes("one-piece"))?.price).toBe(169);
+  });
+
+  it("reports likely pagination when a page declares more results than the parser extracted", () => {
+    const diagnostics = pageExtractionDiagnostics([
+      { ...incoming, rawData: { pageUrl: "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true", pageReportedCount: 103 } },
+      {
+        ...incoming,
+        canonicalUrl: "https://example.com/box-2",
+        url: "https://example.com/box-2",
+        normalizedTitle: "pokemon tcg booster box 2",
+        rawData: { pageUrl: "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true", pageReportedCount: 103 }
+      }
+    ]);
+
+    expect(diagnostics.pageReportedCounts[0]).toMatchObject({ pageReportedCount: 103, rawExtractedCount: 2 });
+    expect(diagnostics.pageExtractionWarnings[0]?.note).toContain("current page");
   });
 });

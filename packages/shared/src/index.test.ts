@@ -7,6 +7,7 @@ import {
   isNonProductContentTitle,
   keywordRuleMatchesProduct,
   normalizeTitle,
+  normalizeSourceUrl,
   normalizeUrl,
   parsePrice,
   productIdentityKey
@@ -26,6 +27,11 @@ describe("shared normalization utilities", () => {
 
   it("normalizes URLs and strips fragments", () => {
     expect(normalizeUrl("/product?a=2&b=1#details", "https://example.com")).toBe("https://example.com/product?a=2&b=1");
+  });
+
+  it("keeps query params and hash fragments for source candidate URLs", () => {
+    expect(normalizeSourceUrl("/category?b=1&a=2#filters", "https://example.com")).toBe("https://example.com/category?a=2&b=1#filters");
+    expect(normalizeUrl("/category?b=1&a=2#filters", "https://example.com")).toBe("https://example.com/category?a=2&b=1");
   });
 
   it("infers the target game from product titles", () => {
@@ -195,7 +201,8 @@ describe("shared normalization utilities", () => {
       "Pokémon TCG: Elite Trainer Box",
       "Pokémon TCG: Enhanced Booster Display",
       "Pokémon TCG: 2-Pack Blister",
-      "Pokémon TCG: Cynthia’s Garchomp ex Premium Collection"
+      "Pokémon TCG: Cynthia’s Garchomp ex Premium Collection",
+      "Pokémon TCG Paldea Legends Tins: Miraidon ex Plechovka"
     ]) {
       expect(isLikelySealedTcgProductTitle(title)).toBe(true);
     }
@@ -206,6 +213,22 @@ describe("shared normalization utilities", () => {
       isRelevantTargetProduct({
         title: "Snow Hazard Booster (asijsky)",
         normalizedTitle: normalizeTitle("Snow Hazard Booster (asijsky)"),
+        game: "POKEMON",
+        category: "Sealed"
+      })
+    ).toBe(true);
+    expect(
+      isRelevantTargetProduct({
+        title: "Paldea Legends Tins: Miraidon ex Plechovka",
+        normalizedTitle: normalizeTitle("Paldea Legends Tins: Miraidon ex Plechovka"),
+        game: "POKEMON",
+        category: "Sealed"
+      })
+    ).toBe(true);
+    expect(
+      isRelevantTargetProduct({
+        title: "Ascended Heroes: Erika's Tangela 2-Pack Blister",
+        normalizedTitle: normalizeTitle("Ascended Heroes: Erika's Tangela 2-Pack Blister"),
         game: "POKEMON",
         category: "Sealed"
       })

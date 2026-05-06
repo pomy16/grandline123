@@ -1,5 +1,5 @@
 import type { MonitorMode } from "@prisma/client";
-import { normalizeUrl } from "@tcg-monitor/shared";
+import { normalizeSourceUrl } from "@tcg-monitor/shared";
 import { isSafeScanSourceUrl } from "./source-candidates";
 
 type SourceCandidateLike = {
@@ -32,7 +32,7 @@ function metadataArrayLength(metadata: unknown, key: string) {
 
 function sourceKey(url: string, baseUrl: string) {
   try {
-    return normalizeUrl(url, baseUrl);
+    return normalizeSourceUrl(url, baseUrl);
   } catch {
     return url.trim();
   }

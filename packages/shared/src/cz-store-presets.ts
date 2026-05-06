@@ -36,9 +36,9 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     active: false,
     trusted: true,
     recommended: false,
-    testedStatus: "needs attention / paused",
+    testedStatus: "limited / needs attention / paused",
     sourceSummary: "Public Alza Pokemon cards listing sorted by price.",
-    limitation: "Use browser rendering for diagnostics, but if the site returns HTTP 403 it must remain Needs Attention with zero products/events/alerts."
+    limitation: "Use browser rendering for diagnostics, but if the site returns HTTP 403 or a Cloudflare human-check page it must remain limited / Needs Attention with zero products/events/alerts."
   },
   {
     id: "preset-cz-dracik",
@@ -256,6 +256,7 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     webhookName: "cz-najada",
     baseUrl: "https://www.najada.games",
     listingUrls: [
+      "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true",
       "https://www.najada.games/pokemon",
       "https://www.najada.games/en/pokemon/boosters",
       "https://www.najada.games/en/card-games/one-piece"
@@ -269,8 +270,8 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     trusted: true,
     recommended: false,
     testedStatus: "local preview found relevant products / paused",
-    sourceSummary: "Public Najáda Pokemon and One Piece category pages. Search snippets show product listings with prices and stock states.",
-    limitation: "Local preview found relevant products after filtering, but the broad Pokemon and One Piece pages include accessories and merchandise too; review the first manual scan before enabling scheduled scans."
+    sourceSummary: "Public Najáda in-stock Pokemon filter, broader Pokemon category, Pokemon boosters, and One Piece category pages.",
+    limitation: "Use the in-stock Pokemon filter first because it exposes JSON-LD ItemList products with price and availability. The broad Pokemon and One Piece pages include accessories and merchandise too; keep paused until a manual scan confirms the route."
   },
   {
     id: "preset-cz-professor-onyx",

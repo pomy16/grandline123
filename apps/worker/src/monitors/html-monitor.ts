@@ -31,6 +31,28 @@ function inferGameFromProductContext(title: string, href: string, pageUrl: strin
   return "UNKNOWN";
 }
 
+export function extractPageReportedCount(html: string) {
+  const text = stripHtml(html);
+  const match =
+    text.match(/Nalezeno\s+(\d{1,6})\s+(?:výsledků|výsledky|výsledek)/i) ??
+    text.match(/Found\s+(\d{1,6})\s+(?:results?|items?|products?)/i);
+  return match?.[1] ? Number.parseInt(match[1], 10) : null;
+}
+
+function withPageContext(product: NormalizedProduct, pageUrl: string, source: string, pageReportedCount: number | null): NormalizedProduct {
+  const rawData = typeof product.rawData === "object" && product.rawData !== null ? product.rawData : {};
+  return {
+    ...product,
+    game: product.game === "UNKNOWN" ? inferGameFromProductContext(product.title, product.canonicalUrl, pageUrl) : product.game,
+    rawData: {
+      ...rawData,
+      source,
+      pageUrl,
+      pageReportedCount
+    }
+  };
+}
+
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
   const title = selectorText(html, storeConfig.selectors?.title) ?? selectorText(html, "h1");
   const href = selectorHref(html, storeConfig.selectors?.productUrl);
@@ -196,12 +218,13 @@ export class HtmlMonitor implements StoreMonitor {
 
 export function productsFromHtmlDocument(html: string, storeConfig: StoreConfig, pageUrl: string, source: string) {
   const products: NormalizedProduct[] = [];
+  const pageReportedCount = extractPageReportedCount(html);
   for (const item of extractJsonLd(html)) {
     const product = productFromUnknown(item, storeConfig, source);
-    if (product) products.push(product);
+    if (product) products.push(withPageContext(product, pageUrl, source, pageReportedCount));
   }
-  products.push(...productsFromProductCards(html, storeConfig, pageUrl, source));
+  products.push(...productsFromProductCards(html, storeConfig, pageUrl, source).map((product) => withPageContext(product, pageUrl, source, pageReportedCount)));
   const selected = productFromSelectors(html, storeConfig, pageUrl);
-  if (selected) products.push({ ...selected, rawData: { source, pageUrl, parser: "selectors" } });
+  if (selected) products.push({ ...withPageContext(selected, pageUrl, source, pageReportedCount), rawData: { source, pageUrl, parser: "selectors", pageReportedCount } });
   return uniqueProducts(products);
 }

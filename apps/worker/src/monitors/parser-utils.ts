@@ -22,10 +22,13 @@ export function attrValue(tag: string, attr: string) {
 }
 
 export function normalizeStockStatus(value: unknown): { stockStatus: StockStatus; isAvailable: boolean; isPreorder: boolean } {
-  const normalized = String(value ?? "").toLowerCase();
-  const preorder = /pre[\s-]?order|předobjed|reservation|reserve/.test(normalized);
-  const out = /out of stock|sold out|unavailable|not available|vyprod|ausverkauft|non disponible/.test(normalized);
-  const inStock = /in stock|available|skladem|lager|add to cart|buy now/.test(normalized);
+  const normalized = String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const preorder = /pre[\s-]?order|preorder|predobjed|reservation|reserve/.test(normalized);
+  const out = /out[\s-]?of[\s-]?stock|sold[\s-]?out|unavailable|not available|vyprod|ausverkauft|non disponible/.test(normalized);
+  const inStock = /in[\s-]?stock|instock|available|skladem|na sklade|dostupne|lager|add to cart|buy now/.test(normalized);
   if (preorder) return { stockStatus: "PREORDER", isAvailable: true, isPreorder: true };
   if (out) return { stockStatus: "OUT_OF_STOCK", isAvailable: false, isPreorder: false };
   if (inStock || value === true) return { stockStatus: "IN_STOCK", isAvailable: true, isPreorder: false };
@@ -246,20 +249,46 @@ function firstPublicCartUrl(storeConfig: StoreConfig, ...values: unknown[]) {
   return null;
 }
 
+function firstRecord(value: unknown): Record<string, unknown> {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && typeof candidate === "object" ? (candidate as Record<string, unknown>) : {};
+}
+
+function firstImageUrl(value: unknown) {
+  const image = Array.isArray(value) ? value[0] : value;
+  if (typeof image === "string") return image;
+  if (image && typeof image === "object") {
+    const record = image as Record<string, unknown>;
+    return pickString(record.url, record.contentUrl, record.thumbnailUrl);
+  }
+  return null;
+}
+
+function firstPriceValue(...values: unknown[]) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim()) return parsePrice(value);
+  }
+  return null;
+}
+
+function typeIncludes(value: unknown, expected: string) {
+  const values = Array.isArray(value) ? value : [value];
+  return values.some((candidate) => typeof candidate === "string" && new RegExp(`\\b${expected}\\b`, "i").test(candidate));
+}
+
 export function productFromUnknown(item: unknown, storeConfig: StoreConfig, source: string, onReject?: (reason: string) => void): NormalizedProduct | null {
   if (!item || typeof item !== "object") return null;
   const record = item as Record<string, unknown>;
-  const offers = record.offers && typeof record.offers === "object" ? (Array.isArray(record.offers) ? record.offers[0] : record.offers) : null;
-  const offer = offers && typeof offers === "object" ? (offers as Record<string, unknown>) : {};
-  const imageCandidate = Array.isArray(record.image) ? record.image[0] : record.image;
+  const offer = firstRecord(record.offers);
+  const priceSpecification = firstRecord(offer.priceSpecification ?? record.priceSpecification);
   const rawTitle = pickString(record.title, record.name, record.productName, record.headline);
   const title = rawTitle ? cleanProductTitle(rawTitle) : null;
   const canonicalUrl = firstValidProductUrl(storeConfig, record.productUrl, record.url, record.link, record["@id"], offer.url);
-  const type = Array.isArray(record["@type"]) ? record["@type"].join(" ") : pickString(record["@type"], record.type);
-  const jsonLdProduct = /\bProduct\b/i.test(type ?? "");
-  const priceValue = record.price ?? record.salePrice ?? record.currentPrice ?? offer.price;
-  const price = typeof priceValue === "number" ? priceValue : priceValue ? parsePrice(String(priceValue)) : null;
-  const imageUrl = pickString(record.imageUrl, imageCandidate, record.thumbnail, record.thumbnailUrl);
+  const jsonLdProduct = typeIncludes(record["@type"] ?? record.type, "Product");
+  const price = firstPriceValue(record.price, record.salePrice, record.currentPrice, offer.price, priceSpecification.price);
+  const imageUrl = pickString(record.imageUrl, firstImageUrl(record.image), record.thumbnail, record.thumbnailUrl);
   const sku = pickString(record.sku, record.mpn, record.productCode);
   const ean = pickString(record.ean, record.gtin, record.gtin13, record.barcode);
   if (!meaningfulProductTitle(title, storeConfig)) {
@@ -286,7 +315,7 @@ export function productFromUnknown(item: unknown, storeConfig: StoreConfig, sour
     imageUrl,
     publicCartUrl,
     price,
-    currency: pickString(record.currency, record.priceCurrency, offer.priceCurrency) ?? storeConfig.currency,
+    currency: pickString(record.currency, record.priceCurrency, offer.priceCurrency, priceSpecification.priceCurrency) ?? storeConfig.currency,
     ...stock,
     sku,
     ean,
@@ -297,30 +326,54 @@ export function productFromUnknown(item: unknown, storeConfig: StoreConfig, sour
 }
 
 export function uniqueProducts(products: NormalizedProduct[]) {
-  const seen = new Set<string>();
-  return products.filter((product) => {
-    const key = `${product.canonicalUrl}|${product.sku ?? ""}|${product.ean ?? ""}|${product.normalizedTitle}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const byIdentity = new Map<string, NormalizedProduct>();
+  const aliases = new Map<string, string>();
+  const score = (product: NormalizedProduct) =>
+    [
+      product.price !== null && product.price !== undefined,
+      Boolean(product.imageUrl),
+      Boolean(product.sku),
+      Boolean(product.ean),
+      product.stockStatus !== "UNKNOWN",
+      product.game !== "UNKNOWN"
+    ].filter(Boolean).length;
+
+  for (const product of products) {
+    const identities = [`url:${product.canonicalUrl}`, product.sku ? `sku:${product.sku}` : null, product.ean ? `ean:${product.ean}` : null].filter(
+      (value): value is string => Boolean(value)
+    );
+    const key = identities.map((identity) => aliases.get(identity)).find(Boolean) ?? identities[0];
+    const existing = byIdentity.get(key);
+    if (!existing || score(product) > score(existing)) {
+      byIdentity.set(key, product);
+    }
+    for (const identity of identities) aliases.set(identity, key);
+  }
+
+  return Array.from(byIdentity.values());
 }
 
 export function extractJsonLd(html: string): unknown[] {
   const items: unknown[] = [];
   const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
+  const flatten = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) flatten(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    items.push(record);
+
+    if (Array.isArray(record["@graph"])) flatten(record["@graph"]);
+    if (typeIncludes(record["@type"], "ItemList") || record.itemListElement) flatten(record.itemListElement);
+    if (typeIncludes(record["@type"], "ListItem") || record.item) flatten(record.item);
+  };
+
   for (const script of scripts) {
     const raw = script.replace(/^<script[^>]*>/i, "").replace(/<\/script>$/i, "").trim();
     try {
-      const parsed = JSON.parse(raw);
-      const values = Array.isArray(parsed) ? parsed : [parsed];
-      for (const value of values) {
-        if (value && typeof value === "object" && "@graph" in value && Array.isArray((value as { "@graph": unknown[] })["@graph"])) {
-          items.push(...(value as { "@graph": unknown[] })["@graph"]);
-        } else {
-          items.push(value);
-        }
-      }
+      flatten(JSON.parse(raw));
     } catch {
       continue;
     }

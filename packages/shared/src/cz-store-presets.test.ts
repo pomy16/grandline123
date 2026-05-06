@@ -64,6 +64,12 @@ describe("Czech store presets", () => {
     expect(JSON.stringify(CZ_STORE_PRESETS)).not.toMatch(/discord(?:app)?\.com\/api\/webhooks/i);
   });
 
+  it("prefers the Najáda public in-stock filter source while keeping the store paused", () => {
+    const najada = CZ_STORE_PRESETS.find((preset) => preset.slug === "cz-najada");
+    expect(najada?.active).toBe(false);
+    expect(najada?.listingUrls[0]).toBe("https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true");
+  });
+
   it("uses safe public preset URLs without cart or checkout paths", () => {
     for (const preset of CZ_STORE_PRESETS) {
       expect(preset.listingUrls.length).toBeGreaterThan(0);

@@ -925,3 +925,75 @@ Next planned step:
 Current PR ready to merge:
 
 - Still draft. Core checks pass, but the PR should remain draft until the user retests Product Test routing and scan diagnostics locally.
+
+### 17:38 CEST - Safe JSON-LD ItemList Parser And Source URL Diagnostics
+
+Work continued from previous unmerged PR: yes, continuing on `daily-autonomous-improvements` / PR #17.
+
+What was inspected:
+
+- Current git status.
+- Najáda and Alza Stores, SourceCandidates, ScanJobs, ScanLogs, and recent Products through read-only Prisma inspection.
+- `PlaywrightMonitor`, HTML/JSON-LD parser utilities, discovery validation, scan diagnostics, source candidate helpers, and CZ presets.
+- Safe read-only Playwright dry-runs against:
+  - `https://www.najada.games/pokemon`
+  - `https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true`
+  - the user-provided Alza filtered hash URL.
+
+Root cause:
+
+- Najáda's filtered public page exposes strong JSON-LD `ItemList -> itemListElement -> item -> Product` data with price, SKU, image, and `schema.org/InStock`, but the parser only read top-level JSON-LD objects.
+- The fallback rendered card parser extracted product anchors, but often missed stock/price because those labels live outside the short anchor HTML slice.
+- SourceCandidate normalization reused product URL normalization, which strips hash fragments. That is correct for canonical Product URLs, but not for source URLs when client-side filters live in the hash.
+- Alza's filtered hash URL returned a Cloudflare/403 human-check page in safe public Playwright validation. No bypass was attempted.
+
+What changed:
+
+- JSON-LD extraction now flattens nested `ItemList`, `itemListElement`, `ListItem`, and `item` nodes so embedded Product entries are parsed.
+- `Offer.availability` values such as `https://schema.org/InStock`, `http://schema.org/InStock`, and `InStock` now map to `IN_STOCK`.
+- `Offer.priceSpecification.price` and `priceCurrency` are now parsed when direct `Offer.price` is not present.
+- Product game context from the source page is applied to JSON-LD products, while non-target games such as Lorcana remain non-target.
+- Source URL normalization was separated from Product URL normalization:
+  - Product URLs still drop hash fragments.
+  - SourceCandidate URLs preserve query params and hash fragments.
+- Najáda preset now prefers `https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true` while staying paused by default.
+- Sealed relevance now accepts safe context-backed Czech `plechovka` terms and keeps existing blister/tin/mini tin/Poké Ball Tin handling.
+- Scan/discovery diagnostics now include page reported count data and warn when the page reports many more products than the parser extracted, indicating pagination, lazy loading, or multiple source candidates may be needed.
+- README documents JSON-LD ItemList parsing, SourceCandidate vs Product URL normalization, Najáda's recommended source URL, and Alza's limited/needs-attention status.
+
+Safe dry-run result:
+
+- Before this fix, Najáda filtered dry-run returned roughly `31 raw`, `10 relevant`, `1 in-stock`, with most stock/price values missing.
+- After the fix, Najáda filtered dry-run returned `31 raw`, `11 relevant`, `11 in-stock`, `9 priced`, and `pageReportedCount=103`.
+- The improvement came from JSON-LD ItemList parsing, not from bypassing or changing network behavior.
+
+Intentionally not changed:
+
+- No DB writes during investigation.
+- No Discord sends.
+- No Alza bypass, CAPTCHA solving, proxy, evasion, or private endpoint usage.
+- No checkout or purchase automation.
+- No historical data cleanup.
+
+Test results so far:
+
+- `npm run build -w @tcg-monitor/shared` passed.
+- Targeted tests passed:
+  - `packages/shared/src/index.test.ts`
+  - `packages/shared/src/cz-store-presets.test.ts`
+  - `apps/worker/src/monitors/parser-utils.test.ts`
+  - `apps/api/src/services/source-candidates.test.ts`
+  - `apps/worker/src/services/scanner.test.ts`
+
+Remaining risk:
+
+- Najáda page reports `103` results, while one rendered page currently extracts `31` unique raw products. Multiple active source candidates or pagination support is still needed to cover all visible results.
+- Alza remains limited because safe public validation returned HTTP 403/Cloudflare.
+
+Next planned step:
+
+- Run full verification (`typecheck`, `test`, production build, `git diff --check`) and keep PR #17 as draft unless the full suite and manual retest are clean.
+
+Current PR ready to merge:
+
+- Still draft until full verification and local UI retest are complete.

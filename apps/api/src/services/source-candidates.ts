@@ -1,4 +1,4 @@
-import { normalizeUrl } from "@tcg-monitor/shared";
+import { normalizeSourceUrl } from "@tcg-monitor/shared";
 
 function normalizePathForSafety(value: string) {
   return value
@@ -9,7 +9,7 @@ function normalizePathForSafety(value: string) {
 
 function sourceKey(url: string, baseUrl: string) {
   try {
-    return normalizeUrl(url, baseUrl);
+    return normalizeSourceUrl(url, baseUrl);
   } catch {
     return url.trim();
   }

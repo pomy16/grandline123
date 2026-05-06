@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isRelevantTargetProduct, type StoreConfig } from "@tcg-monitor/shared";
-import { productLinks, productsFromHtmlDocument, productsFromProductCards, publicCartLink } from "./html-monitor";
+import { extractPageReportedCount, productLinks, productsFromHtmlDocument, productsFromProductCards, publicCartLink } from "./html-monitor";
 import { isPurchaseAssistUrl, isValidSourceCandidateUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
 
 const store: StoreConfig = {
@@ -100,6 +100,83 @@ describe("product parser normalization", () => {
       price: 119,
       game: "POKEMON"
     });
+  });
+
+  it("flattens JSON-LD ItemList products with Offer availability and price", () => {
+    const products = productsFromHtmlDocument(
+      `<script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "item": {
+                "@type": "Product",
+                "name": "Ascended Heroes Booster Bundle",
+                "sku": "IAJ6G1",
+                "url": "https://www.najada.games/produkt/ascended-heroes-booster-bundle-IAJ6G1",
+                "image": "https://www.najada.games/booster-bundle.webp",
+                "offers": {
+                  "@type": "Offer",
+                  "availability": "https://schema.org/InStock",
+                  "priceSpecification": [{
+                    "@type": "UnitPriceSpecification",
+                    "price": 2299,
+                    "priceCurrency": "CZK"
+                  }]
+                }
+              }
+            }
+          ]
+        }
+      </script>`,
+      { ...store, name: "Najáda", baseUrl: "https://www.najada.games", listingUrls: ["https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true"], currency: "CZK" },
+      "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true",
+      "playwright-monitor"
+    );
+
+    expect(products).toHaveLength(1);
+    expect(products[0]).toMatchObject({
+      title: "Ascended Heroes Booster Bundle",
+      canonicalUrl: "https://www.najada.games/produkt/ascended-heroes-booster-bundle-IAJ6G1",
+      price: 2299,
+      stockStatus: "IN_STOCK",
+      isAvailable: true,
+      sku: "IAJ6G1",
+      game: "POKEMON"
+    });
+    expect(isRelevantTargetProduct(products[0])).toBe(true);
+  });
+
+  it("supports Najada-style JSON-LD ItemList with Czech stock and page reported count diagnostics", () => {
+    const products = productsFromHtmlDocument(
+      `
+        <main>Nalezeno 103 výsledků</main>
+        <script type="application/ld+json">
+          {
+            "@type": "ItemList",
+            "itemListElement": [
+              {"@type":"ListItem","item":{"@type":"Product","name":"Paldea Legends Tins: Miraidon ex Plechovka","sku":"37CKV3","url":"/produkt/paldea-legends-tins-miraidon-ex-plechovka-37CKV3","image":"/tin.webp","offers":{"availability":"InStock","price":"849","priceCurrency":"CZK"}}},
+              {"@type":"ListItem","item":{"@type":"Product","name":"Ascended Heroes: Erika's Tangela 2-Pack Blister","sku":"8CSRIT","url":"/produkt/ascended-heroes-erikas-tangela-2-pack-blister-8CSRIT","image":"/blister.webp","offers":{"availability":"http://schema.org/InStock","priceSpecification":{"price":"749","priceCurrency":"CZK"}}}}
+            ]
+          }
+        </script>
+      `,
+      { ...store, name: "Najáda", baseUrl: "https://www.najada.games", listingUrls: ["https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true"], currency: "CZK" },
+      "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true",
+      "playwright-monitor"
+    );
+
+    expect(products.map((product) => product.title)).toEqual([
+      "Paldea Legends Tins: Miraidon ex Plechovka",
+      "Ascended Heroes: Erika's Tangela 2-Pack Blister"
+    ]);
+    expect(products.every((product) => product.stockStatus === "IN_STOCK")).toBe(true);
+    expect(products.every(isRelevantTargetProduct)).toBe(true);
+    expect(products[0].rawData).toMatchObject({ pageReportedCount: 103 });
+    expect(extractPageReportedCount("Nalezeno 103 výsledků")).toBe(103);
   });
 
   it("allows Knihy Dobrovsky category URLs as source candidates but rejects them as products", () => {
