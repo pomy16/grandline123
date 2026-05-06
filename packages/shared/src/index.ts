@@ -123,9 +123,10 @@ export function inferGame(title: string): Game {
 export function isNonProductContentTitle(title: string): boolean {
   const normalized = normalizeTitle(title);
   if (!normalized) return true;
-  if (/^(bestseller|na prodejne|nedostupne|skladem|vyprodano|predobjednavka|novinka|akce|tip)$/.test(normalized)) return true;
+  if (/^(bestseller|na prodejne|nedostupne|skladem|vyprodano|predobjednavka|novinka|akce|tip|detail|slide|cist cele)$/.test(normalized)) return true;
   if (/^(nacist dalsich|nacist dalsi|dalsi|vice|zobrazit dalsi)(\s+\d+)?$/.test(normalized)) return true;
   if (/^(proc nakupovat u nas|jak nakupovat|obchodni podminky|ochrana osobnich udaju|cookie lista)$/.test(normalized)) return true;
+  if (/^(sberatelske karty|jednotlive karty|pokemon karty|pokemon tcg|tcg one piece|boostery|booster boxy|elite trainer boxy|hotove balicky|sberatelske plechovky|box sety|prislusenstvi|merchandise|asijske pokemon produkty|sety a mixy karet)$/.test(normalized)) return true;
   if (/^jak (zacit|poznat|vybrat|sbirat)\b/.test(normalized)) return true;
   if (/\bna firmy cz$/.test(normalized)) return true;
   if (/\b(firmy cz|zbozi cz|heureka|newsletter|registrace|remarketing)\b/.test(normalized)) return true;
@@ -141,12 +142,51 @@ export function isLikelyAccessoryProduct(title: string): boolean {
 
   const accessoryPatterns = [
     /\bultra pro\b.*\b(deck protector|deck box|pro binder|album|obaly|krabicka|krouzkove album|flip box|toploader|podlozka)\b/,
-    /\b(deck protector|deck box|flip box|card sleeves|sleeves|obaly na karty|obaly|album na|krouzkove album|krabicka na karty|box na karty|toploader|top loader|playmat|hraci podlozka|podlozka|folie|folia)\b/,
-    /\b(a4 album|a5 album|portfolio|folio|binder album|pro binder|binder|poradac)\b/,
+    /\b(deck protector|deck box|flip box|card sleeves|sleeves|obaly na karty|obaly|album|album na|krouzkove album|krabicka na karty|box na karty|toploader|top loader|playmat|hraci podlozka|podlozka|folie|folia)\b/,
+    /\b(a4 album|a5 album|mini album|portfolio|folio|binder album|pro binder|binder|poradac)\b/,
     /\b(figurka|bojova figurka|figure|hracka|darek|darky|plysak|puzzle|plakat|samolepky|prislusenstvi)\b/,
+    /\b(model kit|plastic model|ship model|grand ship collection|model lodi|model lod)\b/,
     /\b(plastovy toploader|casual album|prime album|sbiraci album|sberatelske album)\b/
   ];
   return accessoryPatterns.some((pattern) => pattern.test(normalized));
+}
+
+const sealedTcgProductPatterns = [
+  /\bbooster\b/,
+  /\bbooster box\b/,
+  /\bbooster bundle\b/,
+  /\bbooster display\b/,
+  /\benhanced booster display\b/,
+  /\bdisplay\b/,
+  /\betb\b/,
+  /\belite trainer box\b/,
+  /\btrainer box\b/,
+  /\bblister\b/,
+  /\b2 pack blister\b/,
+  /\bmini tin\b/,
+  /\btin\b/,
+  /\bpoke ball tin\b/,
+  /\bpokeball tin\b/,
+  /\bpoke ball\b/,
+  /\bpokeball\b/,
+  /\bpremium collection\b/,
+  /\bultra premium collection\b/,
+  /\bposter collection\b/,
+  /\bpin collection\b/,
+  /\bcollection\b/,
+  /\bstarter ?deck\b/,
+  /\bleague battle deck\b/,
+  /\bbattle deck\b/,
+  /\bbuild battle\b/,
+  /\bbuild and battle\b/,
+  /\bcard game\b/,
+  /\badventni kalendar\b/,
+  /\bholiday calendar\b/
+];
+
+function hasSealedTcgProductKeyword(title: string) {
+  const normalized = normalizeTitle(title);
+  return sealedTcgProductPatterns.some((pattern) => pattern.test(normalized));
 }
 
 export function isLikelySealedTcgProductTitle(title: string): boolean {
@@ -157,46 +197,14 @@ export function isLikelySealedTcgProductTitle(title: string): boolean {
     /\b(pokemon|pokémon|poke|one piece|tcg|card game|pokemon karty|pokemon karet|op\b|sv\d|me\d)\b/.test(normalized);
   if (!tcgContext) return false;
 
-  const sealedPatterns = [
-    /\bbooster\b/,
-    /\bbooster box\b/,
-    /\bbooster bundle\b/,
-    /\bbooster display\b/,
-    /\benhanced booster display\b/,
-    /\bdisplay\b/,
-    /\betb\b/,
-    /\belite trainer box\b/,
-    /\btrainer box\b/,
-    /\bblister\b/,
-    /\b2 pack blister\b/,
-    /\bmini tin\b/,
-    /\btin\b/,
-    /\bpoke ball tin\b/,
-    /\bpokeball tin\b/,
-    /\bpoke ball\b/,
-    /\bpokeball\b/,
-    /\bpremium collection\b/,
-    /\bultra premium collection\b/,
-    /\bposter collection\b/,
-    /\bpin collection\b/,
-    /\bcollection\b/,
-    /\bstarter ?deck\b/,
-    /\bleague battle deck\b/,
-    /\bbattle deck\b/,
-    /\bbuild battle\b/,
-    /\bbuild and battle\b/,
-    /\bcard game\b/,
-    /\badventni kalendar\b/,
-    /\bholiday calendar\b/
-  ];
-
-  return sealedPatterns.some((pattern) => pattern.test(normalized));
+  return hasSealedTcgProductKeyword(title);
 }
 
 export function isRelevantTargetProduct(product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "game" | "category">): boolean {
   if (isNonProductContentTitle(product.title)) return false;
   if (isLikelyAccessoryProduct(product.title)) return false;
-  return isLikelySealedTcgProductTitle(product.title);
+  if (isLikelySealedTcgProductTitle(product.title)) return true;
+  return product.game !== "UNKNOWN" && hasSealedTcgProductKeyword(product.title);
 }
 
 export function productIdentityKey(input: Pick<NormalizedProduct, "canonicalUrl" | "normalizedTitle" | "sku" | "ean">, storeId: string): string {

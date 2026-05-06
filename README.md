@@ -167,7 +167,7 @@ docker-compose.yml
 
 ## Phase 8 Features
 
-- Disabled-by-default Czech store presets for Alza, Dráčik, Smarty, Pompo, Cardstore, Luxor, Tolarie, and Knihy Dobrovský.
+- Disabled-by-default Czech store presets for Alza, Dráčik, Smarty, Pompo, Cardstore, Luxor, Tolarie, Knihy Dobrovský, Veselý Drak, TCG Karty, Gengar.cz, Hra na netu, Najáda, Professor Onyx, and Kuma.
 - Store presets use public category/listing pages and conservative polling intervals.
 - Store-specific webhook assignment is resolved by webhook record name, not by hardcoded URL.
 - Seed notes document source URLs, recommended intervals, limitations, and missing webhook assignments.
@@ -197,11 +197,14 @@ docker-compose.yml
 - Rendered DOM extraction now supports product-card style category pages in addition to JSON-LD and configured selectors.
 - Product persistence now requires a real product URL and strong product evidence such as price, image, SKU/EAN, product ID, JSON-LD Product type, or a clear product card.
 - Category/listing/search/publisher pages remain valid source candidates, but are rejected as Product records.
+- Homepage, article, guide, blog, privacy/cookie, contact/about, cart, checkout, and other informational URLs are not valid scan source candidates. Existing stale candidates with those URLs are marked `Needs attention` on the next Discovery run.
 - Product-card titles prefer real image/title metadata over badges, stock labels, and load-more controls.
 - Seeded high-priority rules and built-in matching reject common accessory products such as albums, binders, card sleeves, deck boxes, deck protectors, folios, top loaders, and playmats.
 - Scanner persistence is filtered to relevant sealed TCG targets, so articles, external profiles, generic labels, accessories, toys, playmats, albums, sleeves, deck boxes, and similar non-target products do not create Product records, Events, or Discord alerts in future scans.
 - Existing product prices/images/game/category are preserved when a rendered card temporarily omits them, preventing noisy `Unknown` price updates.
 - `PRODUCT_UPDATED` Discord notifications are skipped by default so scans do not spam Discord with non-actionable title/image cleanup changes.
+- Dashboard, Products, Events, Logs, and notification history can flag historical records as `Would skip now` when the current sealed TCG filter would block them.
+- Products has a manual bulk-ignore action for the visible historical false positives that would be skipped now. It requires confirmation, does not delete data, and can be restored product by product.
 - Store status is clearer: `Active`, `Needs attention`, `Empty`, `Auto-paused`, and `Paused`.
 - Czech dynamic/error-prone presets now default to `PLAYWRIGHT` mode while staying paused until tested one by one.
 - Discovery and Playwright rendering still respect robots.txt and normal HTTP status handling; blocked sources fail safely instead of being bypassed.
@@ -231,6 +234,8 @@ The reference bot's scrapers, scheduler, SQLite schema, direct Discord routing m
 The Stores page shows each candidate's:
 
 - status (`Target found`, `Needs attention`, `Empty`, or pending)
+- recommendation (`Recommended`, `Testable`, `Noisy`, `Needs attention`, or `Unsafe`)
+- source score used only for admin diagnostics
 - raw extracted candidate count
 - relevant validated product count
 - skipped non-product/non-target count
@@ -239,7 +244,13 @@ The Stores page shows each candidate's:
 
 Discovery can keep category/listing URLs as candidates, but those URLs are rejected as Product records unless a real product card/detail is validated. A candidate is considered a target only when relevant sealed TCG products pass validation.
 
-Multiple useful source candidates per store are expected, for example separate booster, publisher, and sorted listing pages. The current safe behavior still scans one promoted primary source per store. Full multiple-active-candidate scanning is planned, but should be implemented with database support for per-candidate enablement, worker-level product identity deduplication, and notification deduplication so one product cannot create duplicate events or Discord alerts across sources.
+Multiple useful source candidates per store are expected, for example separate booster, publisher, and sorted listing pages. The Stores UI supports adding validated candidates as extra scan sources when they use the same monitor mode as the store. The first URL remains the primary source for display and defaults; all URLs in `Store.listingUrls` are scanned by the existing monitor adapters and products are deduplicated by canonical URL before persistence. If a candidate uses a different monitor mode, promote it as primary to switch the store mode instead of mixing modes in one scan.
+
+The Stores detail view also includes a `Promote best safe source` action. It is explicit admin-only behavior: the app calculates the best safe validated candidate from relevant product count, skipped noise, URL safety, and monitor-mode fit, then promotes it only after you click and confirm. It does not auto-enable stores, bypass blocked pages, or change fetch behavior.
+
+Store create/update rejects unsafe listing URLs before saving. Cart, add-to-cart, checkout, order, payment, homepage, article, guide, privacy, contact, and off-store URLs cannot be stored as scan sources from the dashboard or API. This does not remove category/listing URLs from Discovery; it only keeps unsafe or non-monitor URLs out of `Store.listingUrls`.
+
+This is intentionally conservative: there is still one store-level monitor mode, no per-candidate fetching behavior, no bypass logic, and no automatic purchasing. Future improvements can add per-candidate enablement metadata and richer per-source scan health without changing the safety model.
 
 ## Environment Variables
 
@@ -468,7 +479,7 @@ Stores support:
 
 Real `API`, `HTML`, `SITEMAP`, `RSS`, and optional `PLAYWRIGHT` adapters are available.
 
-Store-specific Discord webhooks are useful for personal channels such as `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, and `cz-knihy-dobrovsky`. Create or activate the webhook in Settings, then select it on the Store form.
+Store-specific Discord webhooks are useful for personal channels such as `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, `cz-knihy-dobrovsky`, `cz-vesely-drak`, `cz-tcgkarty`, `cz-gengar`, `cz-hranane-tu`, `cz-najada`, `cz-professor-onyx`, and `cz-kuma`. Create or activate the webhook in Settings, then select it on the Store form.
 
 ## Czech Store Presets
 
@@ -488,12 +499,15 @@ The seed links each preset to a store-specific Discord webhook only when a webho
 | Knihy Dobrovský | `cz-knihy-dobrovsky` | `https://www.knihydobrovsky.cz/pokemon-tcg` | `PLAYWRIGHT` | 300s | working | paused |
 | Veselý Drak | `cz-vesely-drak` | `https://www.vesely-drak.cz/produkty/boostery/`, `https://www.vesely-drak.cz/produkty/one-piece-card-game/` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
 | TCG Karty | `cz-tcgkarty` | `https://www.tcgkarty.cz/tcg-pokemon`, `https://www.tcgkarty.cz/tcg-one-piece` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
-| Gengar.cz | `cz-gengar` | `https://www.gengar.cz/pokemon`, `https://www.gengar.cz/one-piece` | `PLAYWRIGHT` | 180s | candidate / paused | paused |
+| Gengar.cz | `cz-gengar` | `https://www.gengar.cz/pokemon`, `https://www.gengar.cz/one-piece` | `PLAYWRIGHT` | 180s | direct scan found relevant products; discovery timeout / paused | paused |
 | Hra na netu | `cz-hranane-tu` | `https://www.hrananetu.cz/kategorie-pokemon` | `PLAYWRIGHT` | 300s | candidate / paused | paused |
+| Najáda | `cz-najada` | `https://www.najada.games/pokemon`, `https://www.najada.games/en/pokemon/boosters`, `https://www.najada.games/en/card-games/one-piece` | `PLAYWRIGHT` | 180s | local preview found relevant products / paused | paused |
+| Professor Onyx | `cz-professor-onyx` | `https://www.professoronyx.com/boostery-2/`, `https://www.professoronyx.com/ostatni-karetni-hry/` | `PLAYWRIGHT` | 180s | local preview found relevant products / paused | paused |
+| Kuma | `cz-kuma` | `https://www.kuma.cz/pokemon-karty/`, `https://www.kuma.cz/boostery/` | `PLAYWRIGHT` | 300s | HTTP 429 during local preview / paused | paused |
 
 Recommended one-by-one test flow:
 
-1. Open Settings and create or update webhook records named `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, `cz-knihy-dobrovsky`, `cz-vesely-drak`, `cz-tcgkarty`, `cz-gengar`, and `cz-hranane-tu`.
+1. Open Settings and create or update webhook records named `cz-alza`, `cz-dracik`, `cz-smarty`, `cz-pompo`, `cz-cardstore`, `cz-luxor`, `cz-tolarie`, `cz-knihy-dobrovsky`, `cz-vesely-drak`, `cz-tcgkarty`, `cz-gengar`, `cz-hranane-tu`, `cz-najada`, `cz-professor-onyx`, and `cz-kuma`.
 2. Paste real webhook URLs only in Settings, not in code, seed files, README, store notes, or logs.
 3. Open Stores and verify each preset has the expected store-specific webhook selected.
 4. Run a Discovery scan for one store at a time.
@@ -511,7 +525,11 @@ Reviewed source notes:
 - Cardstore still has a fetch-failed status from local testing; keep paused.
 - Luxor now uses a Pokemon Day candidate page; keep paused until tested.
 - Tolarie should remain paused; old generic homepage/category products should be ignored.
-- New Veselý Drak, TCG Karty, Gengar.cz, and Hra na netu presets are candidates only and are paused by default.
+- Gengar.cz direct scan found relevant sealed products in the latest local audit, but broader discovery timed out; keep paused and test the selected category source manually.
+- New Veselý Drak, TCG Karty, Gengar.cz, Hra na netu, Najáda, Professor Onyx, and Kuma presets are candidates only and are paused by default.
+- Najáda uses public Pokemon and One Piece category pages; local preview found relevant products, while broad category pages can include accessories and merchandise, so sealed TCG filtering must stay enabled.
+- Professor Onyx uses public Shoptet categories for Pokemon boosters and broader other card games; local preview found relevant products, while the broader category can include non-target games, so review the first scan output before enabling schedules.
+- Kuma uses public Pokemon TCG and booster categories, but local preview returned HTTP 429. Do not bypass it; keep the preset paused and retry later through the normal safe scanner.
 
 Some stores may return HTTP 403, block automated requests, expose robots.txt restrictions, return 404, or expose markup that changes over time. In that case the app should fail safely with zero products, zero events, skipped alerts, scan logs, source candidates marked `Needs attention`, and existing repeated-failure/backoff handling. Do not work around this with CAPTCHA solving, queue bypassing, proxy rotation, evasion logic, login automation, or private endpoints.
 
@@ -526,6 +544,7 @@ Purchase-assist link behavior:
 - Relevant monitored targets are sealed TCG products such as boosters, booster boxes, booster bundles, displays, ETBs, blisters, tins, premium collections, starter decks, battle decks, and One Piece Card Game sealed products.
 - Accessories and non-target pages are skipped before persistence and alerting: albums, binders, folios, card sleeves, deck boxes, top loaders, playmats, figures, toys, posters, stickers, articles, guides, external profile pages such as Firmy.cz, and generic labels like `Bestseller`, `Na prodejně`, or `Nedostupné`.
 - Existing incorrectly extracted products are not deleted automatically. Ignore them manually from Products if they were created before this validation fix.
+- The Products page can also bulk-ignore the currently visible `Would skip now` rows. This is a manual cleanup helper for old data only; it does not affect scanning logic and does not remove records.
 
 Do not use 1-second polling or aggressive retry behavior. Keep normal real-store intervals in the 180-300 second range unless you have a specific safe source and a reason to change it. Reserve 60-second polling for future high-priority watchlist functionality, not as the default for all stores.
 
@@ -623,6 +642,8 @@ From Stores, use `Discover` to queue a source discovery job. The worker checks:
 Discovery candidates are validated with the least suitable public monitor mode. Candidates with validated relevant sealed TCG products are shown as `Target found` and can be promoted to the primary source. Category-only pages, navigation buttons, stock labels, pagination, load-more links, publisher/listing pages, articles, external profiles, and accessories can remain source context or be skipped, but do not count as products and do not create events or Discord alerts.
 
 Product title cleanup removes category badges, stock chips, load-more controls, duplicated price text, and store UI labels such as `Bestseller`, `Na prodejně`, `Skladem online`, and `DMOC`. The scanner then applies the sealed-product relevance filter before Product persistence, Event creation, and Discord delivery.
+
+Notification delivery logs include route diagnostics for new deliveries. The Logs page shows whether a message used store-first routing, fallback routing, or optional high-priority multi-route, plus the matched webhook record name without exposing the webhook URL. This helps verify that high-priority store events stay in the store channel when `DISCORD_MULTI_ROUTE_HIGH_PRIORITY=false`.
 
 Recommended discovery test flow:
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StoreConfig } from "@tcg-monitor/shared";
+import { isRelevantTargetProduct, type StoreConfig } from "@tcg-monitor/shared";
 import { productLinks, productsFromHtmlDocument, productsFromProductCards, publicCartLink } from "./html-monitor";
 import { isPurchaseAssistUrl, isValidSourceCandidateUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
 
@@ -108,6 +108,23 @@ describe("product parser normalization", () => {
       expect(isValidSourceCandidateUrl(`https://www.knihydobrovsky.cz${path}`, knihy)).toBe(true);
       expect(productFromUnknown({ "@type": "Thing", name: "Pokémon TCG", url: path }, knihy, "discovery-metadata")).toBeNull();
     }
+    const najada = { ...store, name: "Najáda", baseUrl: "https://www.najada.games", listingUrls: ["https://www.najada.games/pokemon"] };
+    expect(isValidSourceCandidateUrl("https://www.najada.games/pokemon/booster-boxy", najada)).toBe(true);
+    expect(productFromUnknown({ "@type": "Product", name: "Booster boxy", url: "/pokemon/booster-boxy", image: "/category.jpg", offers: { price: "1" } }, najada, "discovery-metadata")).toBeNull();
+  });
+
+  it("rejects homepage, article, guide, and info pages as scan source candidates", () => {
+    const tcgKarty = { ...store, name: "TCG Karty", baseUrl: "https://www.tcgkarty.cz", listingUrls: ["https://www.tcgkarty.cz/tcg-pokemon"] };
+    const tolarie = { ...store, name: "Tolarie", baseUrl: "https://www.tolarie.cz", listingUrls: ["https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/"] };
+
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/", tcgKarty)).toBe(false);
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/spustili-jsme-sablonu-new-york", tcgKarty)).toBe(false);
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/ochrana-osobnich-udaju-cookie-lista", tcgKarty)).toBe(false);
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/osobni-udaje-heureka", tcgKarty)).toBe(false);
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/o-nas", tcgKarty)).toBe(false);
+    expect(isValidSourceCandidateUrl("http://tolarie.cz/clanky_videa/one-piece-op-11-a-fist-of-divine-speed-prerelease/", tolarie)).toBe(false);
+    expect(isValidSourceCandidateUrl("https://www.tcgkarty.cz/tcg-pokemon", tcgKarty)).toBe(true);
+    expect(isValidSourceCandidateUrl("https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/", tolarie)).toBe(true);
   });
 
   it("rejects navigation, load-more, and stock labels as product titles", () => {
@@ -195,6 +212,34 @@ describe("product parser normalization", () => {
       "Pokémon TCG: Scarlet & Violet 09 Journey Together - Booster",
       "Pokémon TCG: SV10 Destined Rivals - Booster"
     ]);
+  });
+
+  it("uses target category context for ambiguous booster names without accepting non-target games", () => {
+    const products = productsFromProductCards(
+      `
+        <article class="product">
+          <a href="/produkt/snow-hazard-booster-asijsky-K35ON4">
+            <img src="/snow.jpg" alt="Snow Hazard Booster (asijsky)" />
+          </a>
+          <strong>149 Kč</strong>
+        </article>
+        <article class="product">
+          <a href="/produkt/lorcana-wilds-unknown-booster-box-2IBS4Q">
+            <img src="/lorcana.jpg" alt="Lorcana: Wilds Unknown Booster Box" />
+          </a>
+          <strong>2 999 Kč</strong>
+        </article>
+      `,
+      { ...store, name: "Najáda", baseUrl: "https://www.najada.games", listingUrls: ["https://www.najada.games/pokemon"], currency: "CZK" },
+      "https://www.najada.games/pokemon",
+      "playwright-monitor"
+    );
+
+    expect(products).toHaveLength(2);
+    expect(products[0]).toMatchObject({ title: "Snow Hazard Booster (asijsky)", game: "POKEMON" });
+    expect(isRelevantTargetProduct(products[0])).toBe(true);
+    expect(products[1]).toMatchObject({ title: "Lorcana: Wilds Unknown Booster Box", game: "UNKNOWN" });
+    expect(isRelevantTargetProduct(products[1])).toBe(false);
   });
 
   it("skips rendered category controls and labels from product-card extraction", () => {

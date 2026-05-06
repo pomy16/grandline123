@@ -71,6 +71,31 @@ async function discoverMetadataCandidates(storeConfig: StoreConfig) {
   const client = new SafeHttpClient(storeConfig);
   const candidates: CandidateInput[] = [];
 
+  const seedPages = uniqueCandidates(
+    storeConfig.listingUrls.map((url) => ({ url: safeUrl(url, storeConfig), kind: "LISTING", monitorMode: storeConfig.mode === "PLAYWRIGHT" ? "PLAYWRIGHT" : "HTML", discoveredFrom: "store.listingUrls" }))
+      .filter((candidate): candidate is CandidateInput => Boolean(candidate.url))
+  );
+
+  for (const seed of seedPages) {
+    candidates.push(seed);
+    try {
+      const response = await client.fetchText(seed.url, "HTML");
+      for (const url of [...extractAnchorUrls(response.body), ...extractOpenGraphUrls(response.body)]) {
+        const candidateUrl = safeUrl(url, storeConfig);
+        if (candidateUrl && isLikelyTcgSource(candidateUrl)) {
+          candidates.push({ url: candidateUrl, kind: "CATEGORY_LINK", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
+        }
+      }
+      for (const product of productsFromHtmlDocument(response.body, storeConfig, seed.url, "discovery-metadata")) {
+        if (inferGame(product.title) !== "UNKNOWN" || isLikelyTcgSource(product.canonicalUrl)) {
+          candidates.push({ url: product.canonicalUrl, kind: "JSON_LD_PRODUCT", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
   const sitemapUrls = ["/sitemap.xml", "/sitemap_index.xml"].map((path) => new URL(path, storeConfig.baseUrl).toString());
   for (const sitemapUrl of sitemapUrls) {
     const normalized = safeUrl(sitemapUrl, storeConfig);
@@ -96,31 +121,6 @@ async function discoverMetadataCandidates(storeConfig: StoreConfig) {
       const response = await client.fetchText(normalized, "RSS");
       if (/rss|atom|<item|<entry/i.test(response.body)) {
         candidates.push({ url: normalized, kind: "RSS", monitorMode: "RSS", discoveredFrom: normalized, metadata: { status: response.status } });
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  const seedPages = uniqueCandidates(
-    storeConfig.listingUrls.map((url) => ({ url: safeUrl(url, storeConfig), kind: "LISTING", monitorMode: storeConfig.mode === "PLAYWRIGHT" ? "PLAYWRIGHT" : "HTML", discoveredFrom: "store.listingUrls" }))
-      .filter((candidate): candidate is CandidateInput => Boolean(candidate.url))
-  );
-
-  for (const seed of seedPages) {
-    candidates.push(seed);
-    try {
-      const response = await client.fetchText(seed.url, "HTML");
-      for (const url of [...extractAnchorUrls(response.body), ...extractOpenGraphUrls(response.body)]) {
-        const candidateUrl = safeUrl(url, storeConfig);
-        if (candidateUrl && isLikelyTcgSource(candidateUrl)) {
-          candidates.push({ url: candidateUrl, kind: "CATEGORY_LINK", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
-        }
-      }
-      for (const product of productsFromHtmlDocument(response.body, storeConfig, seed.url, "discovery-metadata")) {
-        if (inferGame(product.title) !== "UNKNOWN" || isLikelyTcgSource(product.canonicalUrl)) {
-          candidates.push({ url: product.canonicalUrl, kind: "JSON_LD_PRODUCT", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
-        }
       }
     } catch {
       continue;
@@ -179,6 +179,24 @@ export async function discoverStoreSources(storeId: string, scanJobId?: string) 
   }
 
   try {
+    const existingCandidates = await prisma.sourceCandidate.findMany({
+      where: { storeId: store.id },
+      select: { id: true, url: true, status: true }
+    });
+    const invalidActiveCandidateIds = existingCandidates
+      .filter((candidate) => candidate.status === "ACTIVE" && !isValidSourceCandidateUrl(candidate.url, storeConfig))
+      .map((candidate) => candidate.id);
+    if (invalidActiveCandidateIds.length > 0) {
+      await prisma.sourceCandidate.updateMany({
+        where: { id: { in: invalidActiveCandidateIds } },
+        data: {
+          status: "NEEDS_ATTENTION",
+          productsFound: 0,
+          reason: "Source URL is no longer safe as a scan source: homepage, article, info, cart, checkout, or off-store URL."
+        }
+      });
+    }
+
     const discovered = await discoverMetadataCandidates(storeConfig);
     let activeCount = 0;
     let totalProducts = 0;

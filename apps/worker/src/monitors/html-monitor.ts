@@ -1,4 +1,4 @@
-import type { NormalizedProduct, StoreConfig, StoreMonitor } from "@tcg-monitor/shared";
+import type { Game, NormalizedProduct, StoreConfig, StoreMonitor } from "@tcg-monitor/shared";
 import { inferGame, normalizeTitle, normalizeUrl, parsePrice } from "@tcg-monitor/shared";
 import { SafeHttpClient } from "../http/safe-http-client";
 import {
@@ -17,6 +17,19 @@ import {
   hasStrongProductSignal,
   cleanProductTitle
 } from "./parser-utils";
+
+function inferGameFromProductContext(title: string, href: string, pageUrl: string): Game {
+  const titleGame = inferGame(title);
+  if (titleGame !== "UNKNOWN") return titleGame;
+
+  const context = normalizeTitle(`${href} ${pageUrl}`);
+  if (/\b(lorcana|yu gi oh|yugioh|star wars|riftbound|magic|mtg|flesh and blood|digimon|dragon ball|weiss|altered|gundam|shadowverse|sportovni|sports)\b/.test(context)) {
+    return "UNKNOWN";
+  }
+  if (/\b(pokemon|pokémon)\b/.test(context)) return "POKEMON";
+  if (/\bone piece\b|\bone-piece\b/.test(context)) return "ONE_PIECE";
+  return "UNKNOWN";
+}
 
 export function productFromSelectors(html: string, storeConfig: StoreConfig, pageUrl: string): NormalizedProduct | null {
   const title = selectorText(html, storeConfig.selectors?.title) ?? selectorText(html, "h1");
@@ -104,7 +117,8 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
     if (!title) continue;
     if (!meaningfulProductTitle(title, storeConfig) || normalizeTitle(title).length < 4 || normalizeTitle(title) === normalizeTitle(storeConfig.name)) continue;
     const productTitle = title;
-    if (inferGame(productTitle) === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${productTitle} ${href}`)) continue;
+    const game = inferGameFromProductContext(productTitle, href, pageUrl);
+    if (game === "UNKNOWN" && !/pokemon|pokémon|one[\s-]?piece|tcg|karty|booster|starter|display|etb/i.test(`${productTitle} ${href}`)) continue;
 
     const localHtml = html.slice(match.index, Math.min(match.index + tag.length + 450, html.length));
     const priceText =
@@ -131,7 +145,7 @@ export function productsFromProductCards(html: string, storeConfig: StoreConfig,
       sku: null,
       ean: null,
       category: null,
-      game: inferGame(productTitle),
+      game,
       rawData: { source, pageUrl, parser: "product-card" }
     });
   }

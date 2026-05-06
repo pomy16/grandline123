@@ -226,9 +226,9 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     active: false,
     trusted: true,
     recommended: false,
-    testedStatus: "candidate / paused",
+    testedStatus: "direct scan found relevant products; discovery timeout / paused",
     sourceSummary: "Public Gengar.cz Pokemon and One Piece category pages, rendered with Playwright for dynamic DOM readiness.",
-    limitation: "Upgates category pages can include broad products and purchase buttons; keep paused until manual scan output is reviewed."
+    limitation: "A direct local scan found relevant sealed products, but discovery timed out during the broader audit. Keep paused and test the selected category source manually before enabling scheduled scans."
   },
   {
     id: "preset-cz-hranane-tu",
@@ -248,6 +248,67 @@ export const CZ_STORE_PRESETS: CzStorePreset[] = [
     testedStatus: "candidate / paused",
     sourceSummary: "Public Hra na netu Pokemon category page. No safe One Piece category was found during review.",
     limitation: "Pokemon category appears public, but keep paused until local scan confirms real products and no generic page entries."
+  },
+  {
+    id: "preset-cz-najada",
+    slug: "cz-najada",
+    name: "Najáda",
+    webhookName: "cz-najada",
+    baseUrl: "https://www.najada.games",
+    listingUrls: [
+      "https://www.najada.games/pokemon",
+      "https://www.najada.games/en/pokemon/boosters",
+      "https://www.najada.games/en/card-games/one-piece"
+    ],
+    mode: "PLAYWRIGHT",
+    pollingIntervalSeconds: 180,
+    currency: "CZK",
+    country: "CZ",
+    language: "cs",
+    active: false,
+    trusted: true,
+    recommended: false,
+    testedStatus: "local preview found relevant products / paused",
+    sourceSummary: "Public Najáda Pokemon and One Piece category pages. Search snippets show product listings with prices and stock states.",
+    limitation: "Local preview found relevant products after filtering, but the broad Pokemon and One Piece pages include accessories and merchandise too; review the first manual scan before enabling scheduled scans."
+  },
+  {
+    id: "preset-cz-professor-onyx",
+    slug: "cz-professor-onyx",
+    name: "Professor Onyx",
+    webhookName: "cz-professor-onyx",
+    baseUrl: "https://www.professoronyx.com",
+    listingUrls: ["https://www.professoronyx.com/boostery-2/", "https://www.professoronyx.com/ostatni-karetni-hry/"],
+    mode: "PLAYWRIGHT",
+    pollingIntervalSeconds: 180,
+    currency: "CZK",
+    country: "CZ",
+    language: "cs",
+    active: false,
+    trusted: true,
+    recommended: false,
+    testedStatus: "local preview found relevant products / paused",
+    sourceSummary: "Public Professor Onyx Shoptet categories for Pokemon boosters and broader other card games with One Piece products.",
+    limitation: "Local preview found relevant products after filtering. The other-card-games category also contains non-target games such as Star Wars and Lorcana; sealed TCG relevance filtering must keep only Pokemon and One Piece products."
+  },
+  {
+    id: "preset-cz-kuma",
+    slug: "cz-kuma",
+    name: "Kuma",
+    webhookName: "cz-kuma",
+    baseUrl: "https://www.kuma.cz",
+    listingUrls: ["https://www.kuma.cz/pokemon-karty/", "https://www.kuma.cz/boostery/"],
+    mode: "PLAYWRIGHT",
+    pollingIntervalSeconds: 300,
+    currency: "CZK",
+    country: "CZ",
+    language: "cs",
+    active: false,
+    trusted: true,
+    recommended: false,
+    testedStatus: "HTTP 429 during local preview / paused",
+    sourceSummary: "Public Kuma Pokemon TCG and booster category pages.",
+    limitation: "Local preview hit HTTP 429 and must not be bypassed. Kuma categories also include accessories, singles, and non-Pokemon booster products; keep paused until a safe retry later confirms scan relevance."
   }
 ];
 

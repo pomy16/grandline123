@@ -45,6 +45,7 @@ type StoreRecord = {
   autoPausedAfterFailures: boolean;
   averageScanDurationMs?: number | null;
   sourceCandidates?: SourceCandidate[];
+  sourceHealth?: SourceHealth;
   _count?: { products: number; scanJobs?: number; sourceCandidates?: number };
 };
 
@@ -80,6 +81,40 @@ type SourceCandidate = {
   metadata?: unknown;
   lastCheckedAt?: string | null;
   promotedAt?: string | null;
+  recommendation?: SourceRecommendation;
+};
+
+type SourceRecommendation = {
+  status: string;
+  score: number;
+  reason: string;
+  raw: number;
+  relevant: number;
+  skipped: number;
+  skippedRatio?: number | null;
+  safe: boolean;
+  modeMatches: boolean;
+  isScanSource: boolean;
+};
+
+type SourceHealth = {
+  totalCandidates: number;
+  scanSourceCount: number;
+  targetFound: number;
+  needsAttention: number;
+  empty: number;
+  recommended: number;
+  testable: number;
+  noisy: number;
+  unsafe: number;
+  raw: number;
+  relevant: number;
+  skipped: number;
+  bestCandidateId?: string | null;
+  bestCandidateUrl?: string | null;
+  bestStatus?: string | null;
+  bestScore?: number | null;
+  bestReason: string;
 };
 
 type StoreDetail = StoreRecord & {
@@ -152,6 +187,24 @@ function candidateTone(status: string) {
   return "info" as const;
 }
 
+function recommendationTone(status?: string | null) {
+  if (status === "RECOMMENDED") return "success" as const;
+  if (status === "TESTABLE") return "info" as const;
+  if (status === "NOISY" || status === "NEEDS_ATTENTION") return "warning" as const;
+  if (status === "UNSAFE") return "danger" as const;
+  return "default" as const;
+}
+
+function recommendationLabel(status?: string | null) {
+  if (status === "RECOMMENDED") return "Recommended";
+  if (status === "TESTABLE") return "Testable";
+  if (status === "NOISY") return "Noisy";
+  if (status === "NEEDS_ATTENTION") return "Needs attention";
+  if (status === "UNSAFE") return "Unsafe";
+  if (status === "EMPTY") return "Empty";
+  return "Not recommended";
+}
+
 function metadataNumber(metadata: unknown, key: string) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
   const value = (metadata as Record<string, unknown>)[key];
@@ -165,6 +218,15 @@ function metadataArrayLength(metadata: unknown, key: string) {
 }
 
 function candidateMetrics(candidate: SourceCandidate) {
+  if (candidate.recommendation) {
+    return {
+      raw: candidate.recommendation.raw,
+      validated: candidate.recommendation.relevant,
+      skipped: candidate.recommendation.skipped,
+      skippedNonProducts: 0,
+      skippedNonTargets: candidate.recommendation.skipped
+    };
+  }
   const raw = metadataNumber(candidate.metadata, "rawProductCandidateCount") ?? metadataNumber(candidate.metadata, "rawCandidatesCount");
   const validated =
     metadataNumber(candidate.metadata, "validatedProductCount") ??
@@ -195,15 +257,27 @@ function candidateStatusDetail(candidate: SourceCandidate) {
   return candidate.reason ?? "Candidate is waiting for another discovery pass.";
 }
 
-function sourceSummary(store: Pick<StoreRecord, "sourceCandidates" | "listingUrls">) {
+function sourceSummary(store: Pick<StoreRecord, "sourceCandidates" | "listingUrls" | "sourceHealth">) {
+  if (store.sourceHealth) {
+    return {
+      active: store.sourceHealth.targetFound,
+      attention: store.sourceHealth.needsAttention,
+      empty: store.sourceHealth.empty,
+      primaryCount: store.sourceHealth.bestCandidateId ? 1 : 0,
+      scanSourceCount: store.sourceHealth.scanSourceCount,
+      relevantProducts: store.sourceHealth.relevant,
+      skipped: store.sourceHealth.skipped
+    };
+  }
   const candidates = store.sourceCandidates ?? [];
   const active = candidates.filter((candidate) => candidate.status === "ACTIVE").length;
   const attention = candidates.filter((candidate) => candidate.status === "NEEDS_ATTENTION").length;
   const empty = candidates.filter((candidate) => candidate.status === "EMPTY").length;
   const primaryCount = candidates.filter((candidate) => candidate.promotedAt || store.listingUrls.includes(candidate.url)).length;
+  const scanSourceCount = store.listingUrls.length;
   const relevantProducts = candidates.reduce((total, candidate) => total + candidateMetrics(candidate).validated, 0);
   const skipped = candidates.reduce((total, candidate) => total + candidateMetrics(candidate).skipped, 0);
-  return { active, attention, empty, primaryCount, relevantProducts, skipped };
+  return { active, attention, empty, primaryCount, scanSourceCount, relevantProducts, skipped };
 }
 
 export default function StoresPage() {
@@ -411,6 +485,42 @@ export default function StoresPage() {
     }
   }
 
+  async function promoteBestCandidate(storeId: string) {
+    setMessage(null);
+    setError(null);
+    try {
+      const payload = await apiFetch<{ promotedCandidateId: string; recommendation?: SourceRecommendation }>(`/api/stores/${storeId}/source-candidates/promote-best`, { method: "POST" });
+      setMessage(`Best safe source promoted${payload.recommendation ? ` (${recommendationLabel(payload.recommendation.status)})` : ""}.`);
+      await Promise.all([loadStores(), loadStoreDetail(storeId)]);
+    } catch (promoteError) {
+      setError(promoteError instanceof Error ? promoteError.message : "Best source candidate could not be promoted.");
+    }
+  }
+
+  async function activateCandidate(storeId: string, candidateId: string) {
+    setMessage(null);
+    setError(null);
+    try {
+      await apiFetch(`/api/stores/${storeId}/source-candidates/${candidateId}/activate`, { method: "POST" });
+      setMessage("Source candidate added to scan sources.");
+      await Promise.all([loadStores(), loadStoreDetail(storeId)]);
+    } catch (activateError) {
+      setError(activateError instanceof Error ? activateError.message : "Source candidate could not be added.");
+    }
+  }
+
+  async function deactivateCandidate(storeId: string, candidateId: string) {
+    setMessage(null);
+    setError(null);
+    try {
+      await apiFetch(`/api/stores/${storeId}/source-candidates/${candidateId}/deactivate`, { method: "POST" });
+      setMessage("Source candidate removed from scan sources.");
+      await Promise.all([loadStores(), loadStoreDetail(storeId)]);
+    } catch (deactivateError) {
+      setError(deactivateError instanceof Error ? deactivateError.message : "Source candidate could not be removed.");
+    }
+  }
+
   function toggleSort(field: string) {
     setFilters((current) => ({ ...current, sortBy: field, sortOrder: current.sortBy === field && current.sortOrder === "asc" ? "desc" : "asc", page: 1 }));
   }
@@ -609,14 +719,18 @@ export default function StoresPage() {
                                 </td>
                                 <td className="py-3 pr-4">
                                   <div className="flex flex-wrap gap-1">
-                                    {summary.primaryCount > 0 ? <Badge tone="success">Primary set</Badge> : <Badge tone="default">No primary</Badge>}
+                                    {summary.scanSourceCount > 0 ? <Badge tone="success">{summary.scanSourceCount} scan source{summary.scanSourceCount === 1 ? "" : "s"}</Badge> : <Badge tone="default">No source</Badge>}
                                     {summary.active > 0 ? <Badge tone="success">{summary.active} target</Badge> : null}
                                     {summary.attention > 0 ? <Badge tone="warning">{summary.attention} review</Badge> : null}
                                     {summary.empty > 0 ? <Badge tone="default">{summary.empty} empty</Badge> : null}
+                                    {store.sourceHealth?.bestStatus ? <Badge tone={recommendationTone(store.sourceHealth.bestStatus)}>{recommendationLabel(store.sourceHealth.bestStatus)}</Badge> : null}
                                   </div>
                                   <div className="mt-1 text-xs text-muted-foreground">
                                     Relevant: {summary.relevantProducts} · Skipped: {summary.skipped}
                                   </div>
+                                  {store.sourceHealth?.bestReason ? (
+                                    <div className="mt-1 max-w-72 text-xs text-muted-foreground">{store.sourceHealth.bestReason}</div>
+                                  ) : null}
                                 </td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.lastScanAt)}</td>
                                 <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(store.nextScanAt)}</td>
@@ -773,6 +887,33 @@ export default function StoresPage() {
                     <div className="mt-3 break-all text-xs text-muted-foreground">
                       Primary source: {selectedDetail.listingUrls[0] ? truncateMiddle(selectedDetail.listingUrls[0], 92) : "not set"}
                     </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Active scan sources: {selectedSummary?.scanSourceCount ?? 0}. Monitors scan every URL in this list and deduplicate products before persistence.
+                    </div>
+                    {selectedDetail.sourceHealth ? (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge tone={recommendationTone(selectedDetail.sourceHealth.bestStatus)}>{recommendationLabel(selectedDetail.sourceHealth.bestStatus)}</Badge>
+                          {selectedDetail.sourceHealth.bestScore !== null && selectedDetail.sourceHealth.bestScore !== undefined ? (
+                            <span className="text-xs text-muted-foreground">Score {selectedDetail.sourceHealth.bestScore}</span>
+                          ) : null}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{selectedDetail.sourceHealth.bestReason}</div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={!selectedDetail.sourceHealth.bestCandidateId}
+                          onClick={() => {
+                            if (window.confirm(`Promote the best safe source candidate for ${selectedDetail.name}?`)) {
+                              promoteBestCandidate(selectedDetail.id);
+                            }
+                          }}
+                        >
+                          <CheckCircle2 size={16} aria-hidden />
+                          Promote best safe source
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="rounded-md border border-border bg-background p-3">
                     <div className="flex items-center justify-between gap-3">
@@ -865,26 +1006,48 @@ export default function StoresPage() {
                   {selectedDetail.sourceCandidates.length === 0 ? <EmptyState title="No source candidates yet" detail="Run a discovery scan to inspect public metadata, sitemaps, feeds, and rendered category pages." /> : null}
                   {selectedDetail.sourceCandidates.map((candidate) => {
                     const metrics = candidateMetrics(candidate);
-                    const isPrimary = candidate.promotedAt || selectedDetail.listingUrls.includes(candidate.url);
+                    const isScanSource = selectedDetail.listingUrls.includes(candidate.url);
+                    const isPrimary = selectedDetail.listingUrls[0] === candidate.url;
+                    const modeMatches = candidate.monitorMode === selectedDetail.mode;
                     return (
                       <div key={candidate.id} className="rounded-md border border-border bg-background p-3 text-sm">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge tone={candidateTone(candidate.status)}>{candidateStatusLabel(candidate.status)}</Badge>
+                              {candidate.recommendation ? <Badge tone={recommendationTone(candidate.recommendation.status)}>{recommendationLabel(candidate.recommendation.status)}</Badge> : null}
                               <Badge tone="info">{candidate.monitorMode}</Badge>
                               <Badge tone="default">{candidate.kind}</Badge>
-                              {isPrimary ? <Badge tone="success">Primary source</Badge> : null}
+                              {isPrimary ? <Badge tone="success">Primary source</Badge> : isScanSource ? <Badge tone="success">Scan source</Badge> : null}
+                              {!modeMatches ? <Badge tone="warning">Mode mismatch</Badge> : null}
                             </div>
                             <div className="mt-2 break-all font-mono text-xs text-muted-foreground">{candidate.url}</div>
                             <div className="mt-2 text-xs text-muted-foreground">{candidateStatusDetail(candidate)}</div>
+                            {candidate.recommendation?.reason ? (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Recommendation: {candidate.recommendation.reason}
+                              </div>
+                            ) : null}
                           </div>
-                          <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE"} onClick={() => promoteCandidate(selectedDetail.id, candidate.id)}>
-                            <CheckCircle2 size={16} aria-hidden />
-                            Promote primary
-                          </Button>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE"} onClick={() => promoteCandidate(selectedDetail.id, candidate.id)}>
+                              <CheckCircle2 size={16} aria-hidden />
+                              Promote primary
+                            </Button>
+                            {!isScanSource ? (
+                              <Button type="button" variant="secondary" disabled={candidate.status !== "ACTIVE" || !modeMatches} onClick={() => activateCandidate(selectedDetail.id, candidate.id)}>
+                                <Plus size={16} aria-hidden />
+                                Add source
+                              </Button>
+                            ) : (
+                              <Button type="button" variant="ghost" disabled={selectedDetail.listingUrls.length <= 1} onClick={() => deactivateCandidate(selectedDetail.id, candidate.id)}>
+                                <XCircle size={16} aria-hidden />
+                                Remove source
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-2 xl:grid-cols-6">
                           <div className="rounded-md bg-muted p-2">
                             <div className="text-xs">Relevant products</div>
                             <div className="mt-1 font-medium text-foreground">{metrics.validated}</div>
@@ -896,6 +1059,10 @@ export default function StoresPage() {
                           <div className="rounded-md bg-muted p-2">
                             <div className="text-xs">Skipped</div>
                             <div className="mt-1 font-medium text-foreground">{metrics.skipped}</div>
+                          </div>
+                          <div className="rounded-md bg-muted p-2">
+                            <div className="text-xs">Score</div>
+                            <div className="mt-1 font-medium text-foreground">{candidate.recommendation?.score ?? "-"}</div>
                           </div>
                           <div className="rounded-md bg-muted p-2">
                             <div className="text-xs">Checked</div>
@@ -911,9 +1078,14 @@ export default function StoresPage() {
                             {candidate.reason}
                           </div>
                         ) : null}
-                        {candidate.status === "ACTIVE" && !isPrimary ? (
+                        {candidate.status === "ACTIVE" && !isScanSource && modeMatches ? (
                           <div className="mt-3 text-xs text-muted-foreground">
-                            This candidate is validated and can be promoted. Multiple active candidate scanning is planned, but this release keeps one primary scan source to avoid duplicate alerts.
+                            This validated candidate can be added as another scan source. The monitor scans all active source URLs and product persistence deduplicates by canonical URL.
+                          </div>
+                        ) : null}
+                        {candidate.status === "ACTIVE" && !modeMatches ? (
+                          <div className="mt-3 text-xs text-muted-foreground">
+                            This candidate uses {candidate.monitorMode}, while the store currently uses {selectedDetail.mode}. Promote it as primary to switch modes, or keep it inactive.
                           </div>
                         ) : null}
                       </div>

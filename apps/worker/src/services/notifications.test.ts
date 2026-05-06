@@ -62,6 +62,20 @@ describe("Discord webhook routing priority", () => {
     ).toEqual(["webhook:store-webhook"]);
   });
 
+  it("does not let an explicit HIGH_PRIORITY rule target replace a store webhook", () => {
+    expect(
+      labels(
+        routeCandidates({
+          eventType: "NEW_PRODUCT",
+          productGame: "POKEMON",
+          priority: "HIGH",
+          storeWebhookId: "store-webhook",
+          ruleTarget: "HIGH_PRIORITY"
+        })
+      )
+    ).toEqual(["webhook:store-webhook"]);
+  });
+
   it("routes high-priority store events to store plus HIGH_PRIORITY when multi-route is enabled", () => {
     expect(
       labels(

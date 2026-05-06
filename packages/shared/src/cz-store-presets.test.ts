@@ -15,7 +15,10 @@ describe("Czech store presets", () => {
       "cz-vesely-drak",
       "cz-tcgkarty",
       "cz-gengar",
-      "cz-hranane-tu"
+      "cz-hranane-tu",
+      "cz-najada",
+      "cz-professor-onyx",
+      "cz-kuma"
     ]);
     expect(new Set(CZ_STORE_PRESETS.map((preset) => preset.id)).size).toBe(CZ_STORE_PRESETS.length);
     expect(new Set(CZ_STORE_PRESETS.map((preset) => preset.slug)).size).toBe(CZ_STORE_PRESETS.length);
@@ -46,7 +49,10 @@ describe("Czech store presets", () => {
       "cz-vesely-drak": 180,
       "cz-tcgkarty": 180,
       "cz-gengar": 180,
-      "cz-hranane-tu": 300
+      "cz-hranane-tu": 300,
+      "cz-najada": 180,
+      "cz-professor-onyx": 180,
+      "cz-kuma": 300
     });
   });
 
@@ -66,11 +72,13 @@ describe("Czech store presets", () => {
     }
   });
 
-  it("keeps the new Phase 10 stores paused by default", () => {
-    const newStores = CZ_STORE_PRESETS.filter((preset) => ["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu"].includes(preset.slug));
-    expect(newStores).toHaveLength(4);
+  it("keeps the new post-Phase 8 stores paused by default", () => {
+    const newStores = CZ_STORE_PRESETS.filter((preset) =>
+      ["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu", "cz-najada", "cz-professor-onyx", "cz-kuma"].includes(preset.slug)
+    );
+    expect(newStores).toHaveLength(7);
     expect(newStores.every((preset) => preset.active === false && preset.recommended === false)).toBe(true);
-    expect(newStores.map((preset) => preset.webhookName)).toEqual(["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu"]);
+    expect(newStores.map((preset) => preset.webhookName)).toEqual(["cz-vesely-drak", "cz-tcgkarty", "cz-gengar", "cz-hranane-tu", "cz-najada", "cz-professor-onyx", "cz-kuma"]);
   });
 
   it("assigns store webhooks by webhook record name", () => {

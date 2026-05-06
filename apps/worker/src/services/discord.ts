@@ -204,6 +204,7 @@ export async function sendWebhook(params: {
   productId?: string;
   payload: unknown;
   payloadHash?: string;
+  routeContext?: unknown;
 }) {
   const payloadHash = params.payloadHash ?? createHash("sha256").update(JSON.stringify(params.payload)).digest("hex");
   const startedAt = Date.now();
@@ -226,7 +227,8 @@ export async function sendWebhook(params: {
           durationMs,
           attempts: delivery.attempts,
           rateLimited: delivery.rateLimited,
-          body: delivery.body.slice(0, 500)
+          body: delivery.body.slice(0, 500),
+          route: params.routeContext ?? null
         },
         sentAt: delivery.ok ? new Date() : null,
         error: delivery.ok ? null : `Discord returned ${delivery.status}: ${delivery.body.slice(0, 160)}`

@@ -14,6 +14,8 @@ export interface DashboardSummary {
     createdAt: string;
     product: {
       title: string;
+      game: string;
+      category?: string | null;
       store: { name: string };
     };
   }>;
@@ -54,7 +56,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
           id: "demo",
           type: "NEW_PRODUCT",
           createdAt: new Date().toISOString(),
-          product: { title: "Pokemon TCG Booster Box Demo", store: { name: "Demo Mock Store" } }
+          product: { title: "Pokemon TCG Booster Box Demo", game: "POKEMON", category: "Sealed", store: { name: "Demo Mock Store" } }
         }
       ]
     };

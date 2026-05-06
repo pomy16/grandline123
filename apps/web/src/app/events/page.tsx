@@ -13,6 +13,7 @@ import { Input } from "../../components/ui/input";
 import { Pagination } from "../../components/ui/pagination";
 import { apiFetch } from "../../lib/api-client";
 import { formatDateTime, type PageMeta } from "../../lib/format";
+import { wouldSkipProductNow } from "../../lib/product-quality";
 
 type ProductEvent = {
   id: string;
@@ -24,6 +25,8 @@ type ProductEvent = {
   product: {
     title: string;
     url: string;
+    game: string;
+    category?: string | null;
     store: { id: string; name: string };
   };
 };
@@ -131,7 +134,9 @@ export default function EventsPage() {
             {!loading && events.length > 0 ? (
               <>
                 <div className="relative space-y-3 before:absolute before:bottom-0 before:left-5 before:top-0 before:w-px before:bg-border">
-                  {events.map((event) => (
+                  {events.map((event) => {
+                    const wouldSkipNow = wouldSkipProductNow(event.product);
+                    return (
                     <div key={event.id} className="relative grid gap-3 rounded-md border border-border bg-background p-4 pl-14 lg:grid-cols-[1fr_320px]">
                       <div className="absolute left-[13px] top-5 flex h-4 w-4 items-center justify-center rounded-full bg-card ring-4 ring-background">
                         <div className="h-2 w-2 rounded-full bg-primary" />
@@ -140,9 +145,15 @@ export default function EventsPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge tone={eventTone(event.type)}>{event.type}</Badge>
                           <Badge tone={event.notificationSent ? "success" : "default"}>{event.notificationSent ? "Notification sent" : "Notification pending"}</Badge>
+                          {wouldSkipNow ? <Badge tone="warning">Would skip now</Badge> : null}
                         </div>
                         <div className="mt-2 font-medium">{event.product.title}</div>
                         <div className="mt-1 text-sm text-muted-foreground">{event.product.store.name} · {formatDateTime(event.createdAt)}</div>
+                        {wouldSkipNow ? (
+                          <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs leading-5 text-yellow-100">
+                            Current relevance filtering treats this product as historical noise or a non-target product. Future scans should not create events or Discord alerts for it.
+                          </div>
+                        ) : null}
                         <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
                           <div className="rounded-md border border-border bg-muted/40 p-3">
                             <div className="mb-1 text-xs text-muted-foreground">Old value</div>
@@ -161,7 +172,8 @@ export default function EventsPage() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <Pagination meta={meta} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} />
               </>
