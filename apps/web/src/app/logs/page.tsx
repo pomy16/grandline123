@@ -54,7 +54,7 @@ const defaultMeta: PageMeta = { page: 1, pageSize: 25, total: 0, totalPages: 1 }
 const severities = ["DEBUG", "INFO", "WARN", "ERROR"];
 const jobStatuses = ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"];
 const notificationStatuses = ["PENDING", "SENT", "FAILED", "SKIPPED"];
-const targets = ["DEFAULT", "POKEMON", "ONE_PIECE", "HIGH_PRIORITY", "ERROR_LOG"];
+const targets = ["DEFAULT", "POKEMON", "ONE_PIECE", "HIGH_PRIORITY", "ERROR_LOG", "TEST", "RESTOCK", "PRICE_DROP", "PREORDER"];
 
 function severityTone(severity: string) {
   if (severity === "ERROR") return "danger";
@@ -154,6 +154,33 @@ export default function LogsPage() {
       <AuthGate>
         <div className="space-y-4">
           {error ? <ErrorState message={error} onRetry={loadLogs} /> : null}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Scan diagnostics</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-muted-foreground">
+                Scan jobs show products, events, duration, and failure reasons. Skipped non-target products should not create events or Discord delivery rows.
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Discord delivery</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-muted-foreground">
+                Delivery history includes store-first routes, test alerts, event-type routes, skipped duplicates, and Discord rate-limit retries without exposing full webhook URLs.
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Source review</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-muted-foreground">
+                Source candidates are reviewed on Stores. A source can be valid for discovery while still producing zero persisted Products when relevance filtering skips every item.
+              </CardContent>
+            </Card>
+          </div>
 
           <Card>
             <CardHeader>
