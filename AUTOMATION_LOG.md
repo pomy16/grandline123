@@ -782,3 +782,55 @@ Staging notes:
 Current PR ready to merge:
 
 - Draft PR is appropriate now. It should remain draft until the UI is manually reviewed and any reviewer feedback is handled.
+
+### 12:54 CEST - Local Dependency Install Recovery
+
+Work continued from previous unmerged PR: yes, continuing on `daily-autonomous-improvements` / PR #17.
+
+What was inspected:
+
+- User-reported local setup sequence where `npm install` hung before Prisma commands.
+- Running npm processes and the previous npm debug behavior.
+- Existing `node_modules` state, Prisma commands, typecheck, tests, and build.
+
+Problems found:
+
+- A stale/hung `npm install` process was still running locally.
+- The hang was caused by the local `node_modules` tree/npm idealTree traversal, not by Prisma, migrations, seed data, or app code.
+- The shell default was Node `v24.15.0` with npm `11.12.1`; the project is aligned with Node 20 typings and now documents Node 20 LTS for local development.
+
+What changed:
+
+- Stopped the hung npm process.
+- Removed and recreated dependency folders with Node 20 using `npm ci --no-audit --no-fund`.
+- Added `.nvmrc` with Node 20.
+- Updated README local setup and verification commands to run `nvm use`, plus a clean reinstall fallback if npm hangs on a stale `node_modules` tree.
+
+Intentionally not changed:
+
+- No application logic.
+- No monitoring/fetching behavior.
+- No Discord routing behavior.
+- No database schema or seed behavior.
+
+Test results:
+
+- `npm ci --no-audit --no-fund` passed.
+- `npm run prisma:generate` passed.
+- `npm run prisma:migrate` passed; database was already in sync.
+- `npm run prisma:seed` passed.
+- `npm run typecheck` passed.
+- `npm test` passed.
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed.
+
+Remaining risk:
+
+- Users already on a corrupted `node_modules` tree may still need the documented clean reinstall once.
+
+Next planned step:
+
+- Push this small setup/documentation fix to the existing draft PR after reviewing the diff.
+
+Current PR ready to merge:
+
+- Still draft. The local setup issue is fixed and verified, but the daily PR should remain draft until manual UI review.

@@ -318,7 +318,16 @@ Use real Discord webhook URLs only when you are ready to test delivery.
 Install dependencies:
 
 ```bash
+nvm use
 npm install
+```
+
+Local development is tested with Node.js 20 LTS. If `npm install` hangs while reading an existing `node_modules` tree, switch to Node 20 and do a clean dependency reinstall:
+
+```bash
+nvm use
+rm -rf node_modules apps/*/node_modules packages/*/node_modules
+npm ci --no-audit --no-fund
 ```
 
 Start PostgreSQL and Redis:
@@ -723,6 +732,7 @@ Current tests cover:
 - Run CI or the local verification commands before deploying:
 
 ```bash
+nvm use
 npm install
 npm run prisma:generate
 npm run typecheck
