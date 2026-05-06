@@ -242,7 +242,7 @@ The Stores page shows each candidate's:
 - reason or blocker
 - whether it is the current primary source
 
-Discovery can keep category/listing URLs as candidates, but those URLs are rejected as Product records unless a real product card/detail is validated. A candidate is considered a target only when relevant sealed TCG products pass validation.
+Discovery can keep category/listing URLs as candidates, but those URLs are rejected as Product records unless a real product card/detail is validated. Product detail URLs themselves are not promoted as scan sources; they belong in Product records, while `SourceCandidate` remains a reusable listing/feed/category source. A candidate is considered a target only when relevant sealed TCG products pass validation.
 
 Product URLs are canonicalized without hash fragments because fragments are usually page-local UI state. SourceCandidate URLs are normalized separately and preserve query parameters plus hash fragments, so public filtered category URLs can remain scan sources when the filter is part of the source URL.
 
@@ -252,7 +252,7 @@ Multiple useful source candidates per store are expected, for example separate b
 
 The Stores detail view also includes a `Promote best safe source` action. It is explicit admin-only behavior: the app calculates the best safe validated candidate from relevant product count, skipped noise, URL safety, and monitor-mode fit, then promotes it only after you click and confirm. It does not auto-enable stores, bypass blocked pages, or change fetch behavior.
 
-Store create/update rejects unsafe listing URLs before saving. Cart, add-to-cart, checkout, order, payment, homepage, article, guide, privacy, contact, and off-store URLs cannot be stored as scan sources from the dashboard or API. This does not remove category/listing URLs from Discovery; it only keeps unsafe or non-monitor URLs out of `Store.listingUrls`.
+Store create/update rejects unsafe listing URLs before saving. Cart, add-to-cart, checkout, order, payment, homepage, article, guide, privacy, contact, off-store URLs, and product detail URLs cannot be stored as scan sources from the dashboard or API. This does not remove category/listing URLs from Discovery; it only keeps unsafe or non-monitor URLs out of `Store.listingUrls`.
 
 This is intentionally conservative: there is still one store-level monitor mode, no per-candidate fetching behavior, no bypass logic, and no automatic purchasing. Future improvements can add per-candidate enablement metadata and richer per-source scan health without changing the safety model.
 
@@ -548,13 +548,13 @@ Some stores may return HTTP 403, block automated requests, expose robots.txt res
 
 Purchase-assist link behavior:
 
-- `SourceCandidate` URLs are monitor sources. They may be category, listing, search, publisher, sitemap, RSS, or API URLs such as `/pokemon-tcg`, `/booster`, or `/publisher/detail/...`.
+- `SourceCandidate` URLs are monitor sources. They may be category, listing, search, publisher, sitemap, RSS, or API URLs such as `/pokemon-tcg`, `/booster`, or `/publisher/detail/...`. Product detail URLs such as Najáda `/produkt/...`, Knihy `/hra/...`, Alza `...-d123.htm`, or Smarty `...-4p123` are not safe scan sources.
 - Product URLs are real product detail URLs used for Product records, monitoring results, and opening product pages. Product persistence requires a meaningful title, product-specific URL, and strong product evidence.
 - `publicCartUrl` is only an optional manual shortcut extracted from public page markup when a valid product page/listing also exposes it.
 - Cart, basket, add-to-cart, checkout, order, and payment URLs are ignored as monitor source URLs and product URLs.
 - The app does not request `publicCartUrl` automatically. The user must click the UI or Discord link manually.
 - No automatic checkout, automatic purchasing, cart submission, order submission, or payment automation is implemented.
-- Relevant monitored targets are sealed TCG products such as boosters, booster boxes, booster bundles, displays, ETBs, blisters, tins, premium collections, starter decks, battle decks, and One Piece Card Game sealed products.
+- Relevant monitored targets are sealed TCG products such as boosters, booster boxes, booster bundles, displays, ETBs, blisters, tins, premium collections, starter decks, battle decks, and One Piece Card Game sealed products. English and Japanese products are preferred. Detectable German, French, Italian, Spanish, Korean, or Chinese localized card products are skipped by default unless a future explicit rule changes that policy.
 - Accessories and non-target pages are skipped before persistence and alerting: albums, binders, folios, card sleeves, deck boxes, top loaders, playmats, figures, toys, posters, stickers, articles, guides, external profile pages such as Firmy.cz, and generic labels like `Bestseller`, `Na prodejně`, or `Nedostupné`.
 - Existing incorrectly extracted products are not deleted automatically. Ignore them manually from Products if they were created before this validation fix.
 - The Products page can also bulk-ignore the currently visible `Would skip now` rows. This is a manual cleanup helper for old data only; it does not affect scanning logic and does not remove records.

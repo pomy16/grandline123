@@ -997,3 +997,86 @@ Next planned step:
 Current PR ready to merge:
 
 - Still draft until full verification and local UI retest are complete.
+
+### 21:33 CEST - Full Store Quality Audit And Source Guard Tightening
+
+Work continued from previous unmerged PR: yes, continuing on `daily-autonomous-improvements` / PR #17.
+
+What was inspected:
+
+- Current git status and untracked local backup files.
+- Routing, notification, scanner, discovery, source-candidate, parser, and preset code paths.
+- Read-only Prisma data for Stores, SourceCandidates, recent Products, ScanJobs, ScanLogs, and NotificationLogs without printing webhook URLs.
+- Safe read-only dry-run scans with no DB writes and no Discord sends.
+
+Root cause found:
+
+- Some product detail URLs were still allowed to become scan source candidates. That can crowd out pagination/listing candidates and makes monitoring too narrow.
+- Alza category/listing URLs like `/hracky/pokemon-tiny-plechovky/18903052.htm` look numeric enough to pass older product URL heuristics, even though real Alza product details use the `-d123...htm` pattern.
+- `inferGame()` treated plain `starter deck` as One Piece, which made non-target Lorcana starter decks look relevant on mixed card-game pages.
+- Najáda exposes pagination links with HTML-escaped query params such as `&amp;p=1`; discovery was normalizing the raw attribute value instead of the decoded URL.
+
+What changed:
+
+- Product detail URLs are rejected as SourceCandidate/scan source URLs while remaining valid Product URLs.
+- Najáda `/produkt/...`, Knihy `/hra/...`, Alza `...-d123.htm`, and Smarty `...-4p123` are treated as product detail URL patterns, not scan sources.
+- Alza numeric category URLs under `/hracky/.../123.htm` are rejected as Product URLs unless they are real `-d123` product detail pages.
+- Discovery anchor extraction now decodes HTML entities before URL normalization.
+- Discovery now recognizes same-path pagination links (`p`, `page`, `pg`, `strana`) as `PAGINATION_LINK` candidates.
+- Discovery no longer creates SourceCandidates from JSON-LD Product detail URLs.
+- `starter deck` no longer implies One Piece by itself; title/source must explicitly identify One Piece.
+- Pokemon set-name hints such as `Mega Evolution`, `Scarlet/Violet`, `Paldea`, `Surging Sparks`, `White Flare`, `Black Bolt`, etc. are used before broad page context.
+- Detectable non-English/non-Japanese localized card products (`German`, `French`, `Italian`, `Spanish`, `Korean`, `Chinese` and Czech equivalents) are skipped by default.
+- README now documents that product detail URLs are not safe scan sources and that EN/JP sealed products are preferred.
+
+Safe audit table:
+
+| Store | Tested sources | Raw | Relevant sealed | In-stock relevant | OOS tracked | Skipped | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Alza | `/levne-pokemon-karty`, `/pokemon-booster-boxy-a-specialni-boxy`, `/pokemon-boostery-a-blistery` | 519 | 67 | 2 | 2 | 452 | Working, but many products have unknown stock; hash-filtered URL remains limited if it returns 403/Cloudflare. |
+| Alza sitemap products | `_sitemap-live-product-1.xml` | 0 | 0 | 0 | 0 | 0 | Blocked by 403 on linked product fetch; do not bypass. |
+| Cardstore | `/pokemon-produkty`, `/one-piece-tcg`, `/japonske-booster-boxy`, `/anglicke-boostery` | 183 | 54 | 0 | 0 | 129 | Limited: relevant sealed products found, but no actionable stock signal. |
+| Dráčik | `/pokemon-karticky` | 372 | 0 | 0 | 0 | 372 | Empty/no relevant products after cart/source safety; keep paused. |
+| Gengar.cz | `/pokemon`, `/one-piece` | 89 | 7 | 2 | 0 | 82 | Working candidate; keep paused until manual route/source review. |
+| Hra na netu | `/kategorie-pokemon` | 20 | 0 | 0 | 0 | 20 | Empty/no relevant products. Historical noisy events are older data. |
+| Knihy Dobrovský | `/pokemon-tcg`, `/booster?sort=8`, `/booster` | 155 | 58 | 54 | 0 | 97 | Working; multiple scan sources are useful. |
+| Kuma | `/pokemon-karty`, `/boostery` | 0 | 0 | 0 | 0 | 0 | Limited: HTTP 429/timeout; do not bypass. |
+| Luxor | `/clanek/727/pokemon-day` | 110 | 7 | 0 | 0 | 103 | Limited: relevant products found, but no actionable stock/price signal. |
+| Najáda | filtered Pokemon, broad Pokemon, EN boosters, EN One Piece | 142 | 37 | 31 | 5 | 105 | Working but needs pagination/multiple candidates; page reports far more products than one rendered page exposes. |
+| Pompo | `/pokemon-tcg`, `/pokemon`, one product-like stale candidate | 4769 | 37 | 0 | 37 | 4732 | Limited: relevant products are currently out of stock; product-detail source candidates should no longer be promoted. |
+| Professor Onyx | `/boostery-2`, `/ostatni-karetni-hry`, `/pokemon-produkty`, `/one-piece` | 217 | 29 | 25 | 0 | 188 | Working after starter-deck/game inference fix. |
+| Smarty | Pokemon TCG, One Piece TCG | 87 | 39 | 0 | 0 | 48 | Limited: relevant products found but stock/price/action signal is missing. |
+| TCG Karty | `tcg-pokemon`, `tcg-one-piece` | 191 | 0 | 0 | 0 | 191 | Empty/no relevant sealed products; current pages are mostly singles/categories. |
+| Tolarie | Pokemon catalog, One Piece catalog | 0 | 0 | 0 | 0 | 0 | Needs feed/API or better public source. |
+| Veselý Drak | boosters, One Piece, booster boxes, ETB | 0 | 0 | 0 | 0 | 0 | Limited in this audit: public pages returned 503. Existing stored candidates previously worked; do not bypass. |
+
+Intentionally not changed:
+
+- No DB data was modified during the audit.
+- No Discord messages were sent.
+- No 403/429/503 bypass, robots bypass, CAPTCHA, proxy, evasion, private endpoint, checkout, or cart automation.
+- Did not auto-promote sources during the audit; source changes should remain explicit.
+
+Test results so far:
+
+- `npm run build -w @tcg-monitor/shared` passed.
+- Targeted tests passed:
+  - `packages/shared/src/index.test.ts`
+  - `apps/worker/src/monitors/parser-utils.test.ts`
+  - `apps/worker/src/services/discovery.test.ts`
+  - `apps/api/src/services/source-candidates.test.ts`
+- One earlier targeted workspace command was malformed and failed because npm passed file paths to every workspace relative to the wrong cwd; rerun per-workspace passed.
+
+Remaining risk:
+
+- Full verification still needs to be rerun after these latest edits.
+- Najáda needs pagination/multiple active candidate workflow to cover all reported results.
+- Several stores are limited by missing stock/action signals, HTTP 429/503, or no useful public source. They should stay paused until manual review or an allowed feed/API is configured.
+
+Next planned step:
+
+- Run full `typecheck`, `npm test`, production build, and `git diff --check`. If clean, commit and push this update to the existing PR #17, still as draft unless the user confirms local UI behavior.
+
+Current PR ready to merge:
+
+- Still draft until full verification completes and the user retests the dashboard/Discord routing locally.

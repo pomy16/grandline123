@@ -1,12 +1,11 @@
 import type { MonitorMode, Store } from "@prisma/client";
 import type { StoreConfig } from "@tcg-monitor/shared";
-import { inferGame, isRelevantTargetProduct, normalizeSourceUrl } from "@tcg-monitor/shared";
+import { isRelevantTargetProduct, normalizeSourceUrl } from "@tcg-monitor/shared";
 import { Prisma } from "@prisma/client";
 import { SafeHttpClient, MonitorRequestError } from "../http/safe-http-client";
 import { createMonitor } from "../monitors";
-import { productsFromHtmlDocument } from "../monitors/html-monitor";
 import { pageExtractionDiagnostics } from "../monitors/page-diagnostics";
-import { isValidSourceCandidateUrl } from "../monitors/parser-utils";
+import { decodeEntities, isValidSourceCandidateUrl } from "../monitors/parser-utils";
 import { prisma } from "../prisma";
 import { toStoreConfig } from "./store-config";
 
@@ -36,15 +35,15 @@ function isLikelyTcgSource(url: string) {
 }
 
 function extractUrlsFromXml(xml: string) {
-  return [...xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map((match) => match[1].trim());
+  return [...xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map((match) => decodeEntities(match[1].trim()));
 }
 
-function extractAnchorUrls(html: string) {
-  return [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1].trim());
+export function extractAnchorUrls(html: string) {
+  return [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].map((match) => decodeEntities(match[1].trim()));
 }
 
 function extractOpenGraphUrls(html: string) {
-  return [...html.matchAll(/<meta\b[^>]*(?:property|name)=["']og:url["'][^>]*content=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1].trim());
+  return [...html.matchAll(/<meta\b[^>]*(?:property|name)=["']og:url["'][^>]*content=["']([^"']+)["'][^>]*>/gi)].map((match) => decodeEntities(match[1].trim()));
 }
 
 function uniqueCandidates(candidates: CandidateInput[]) {
@@ -68,6 +67,20 @@ function errorReason(error: unknown) {
   return error instanceof Error ? error.message : "Unknown discovery failure";
 }
 
+export function isPaginationCandidate(candidateUrl: string, seedUrl: string) {
+  try {
+    const candidate = new URL(candidateUrl);
+    const seed = new URL(seedUrl);
+    if (candidate.origin !== seed.origin || candidate.pathname.replace(/\/+$/, "") !== seed.pathname.replace(/\/+$/, "")) return false;
+    for (const key of candidate.searchParams.keys()) {
+      if (/^(p|page|pg|strana)$/i.test(key)) return true;
+    }
+    return /(?:^|[&#])(?:p|page|pg|strana)=\d+/i.test(candidate.hash);
+  } catch {
+    return false;
+  }
+}
+
 async function discoverMetadataCandidates(storeConfig: StoreConfig) {
   const client = new SafeHttpClient(storeConfig);
   const candidates: CandidateInput[] = [];
@@ -83,13 +96,11 @@ async function discoverMetadataCandidates(storeConfig: StoreConfig) {
       const response = await client.fetchText(seed.url, "HTML");
       for (const url of [...extractAnchorUrls(response.body), ...extractOpenGraphUrls(response.body)]) {
         const candidateUrl = safeUrl(url, storeConfig);
-        if (candidateUrl && isLikelyTcgSource(candidateUrl)) {
+        if (!candidateUrl) continue;
+        if (isPaginationCandidate(candidateUrl, seed.url)) {
+          candidates.push({ url: candidateUrl, kind: "PAGINATION_LINK", monitorMode: seed.monitorMode, discoveredFrom: seed.url });
+        } else if (isLikelyTcgSource(candidateUrl)) {
           candidates.push({ url: candidateUrl, kind: "CATEGORY_LINK", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
-        }
-      }
-      for (const product of productsFromHtmlDocument(response.body, storeConfig, seed.url, "discovery-metadata")) {
-        if (inferGame(product.title) !== "UNKNOWN" || isLikelyTcgSource(product.canonicalUrl)) {
-          candidates.push({ url: product.canonicalUrl, kind: "JSON_LD_PRODUCT", monitorMode: "PLAYWRIGHT", discoveredFrom: seed.url });
         }
       }
     } catch {

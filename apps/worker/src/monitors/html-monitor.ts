@@ -22,6 +22,15 @@ function inferGameFromProductContext(title: string, href: string, pageUrl: strin
   const titleGame = inferGame(title);
   if (titleGame !== "UNKNOWN") return titleGame;
 
+  const productContext = normalizeTitle(`${title} ${href}`);
+  if (
+    /\b(mega evolution|scarlet|violet|paldea|charizard|pikachu|zygarde|team rocket|prismatic|surging sparks|destined rivals|white flare|black bolt|journey together|ascended heroes|phantasmal flames|ruler of the black flame|snow hazard|night wanderer|wild force|cyber judge|ninja spinner|mega brave|mega dream)\b/.test(
+      productContext
+    )
+  ) {
+    return "POKEMON";
+  }
+
   const context = normalizeTitle(`${href} ${pageUrl}`);
   if (/\b(lorcana|yu gi oh|yugioh|star wars|riftbound|magic|mtg|flesh and blood|digimon|dragon ball|weiss|altered|gundam|shadowverse|sportovni|sports)\b/.test(context)) {
     return "UNKNOWN";

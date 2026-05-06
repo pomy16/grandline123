@@ -119,7 +119,7 @@ export function parsePrice(value: string): number | null {
 export function inferGame(title: string): Game {
   const normalized = normalizeTitle(title);
   const pokemon = normalized.includes("pokemon") || normalized.includes("pokémon");
-  const onePiece = normalized.includes("one piece") || normalized.includes("op booster") || normalized.includes("starter deck");
+  const onePiece = normalized.includes("one piece") || normalized.includes("op booster");
   if (pokemon && onePiece) return "BOTH";
   if (pokemon) return "POKEMON";
   if (onePiece) return "ONE_PIECE";
@@ -163,6 +163,13 @@ export function isLikelyAccessoryProduct(title: string): boolean {
     /\b(plastovy toploader|casual album|prime album|sbiraci album|sberatelske album)\b/
   ];
   return accessoryPatterns.some((pattern) => pattern.test(normalized));
+}
+
+export function isUnsupportedLocalizedCardProductTitle(title: string): boolean {
+  const normalized = normalizeTitle(title);
+  const explicitlyAllowedLanguage = /\b(eng|english|jpn|japan|japonsky|japonske|japanese)\b/.test(normalized);
+  if (explicitlyAllowedLanguage) return false;
+  return /\b(nemecky|nemcina|german|deutsch|francouzsky|french|italian|italsky|spanelsky|spanish|korejsky|korean|cinsky|chinese)\b/.test(normalized);
 }
 
 const sealedTcgProductPatterns = [
@@ -242,6 +249,7 @@ function hasSourceContextSealedTcgProductKeyword(title: string) {
 export function isLikelySealedTcgProductTitle(title: string): boolean {
   const normalized = normalizeTitle(title);
   if (!normalized || isNonProductContentTitle(title) || isLikelyAccessoryProduct(title)) return false;
+  if (isUnsupportedLocalizedCardProductTitle(title)) return false;
 
   const tcgContext =
     /\b(pokemon|pokémon|poke|one piece|tcg|card game|pokemon karty|pokemon karet|op\b|sv\d|me\d)\b/.test(normalized);
@@ -253,6 +261,7 @@ export function isLikelySealedTcgProductTitle(title: string): boolean {
 export function isRelevantTargetProduct(product: Pick<NormalizedProduct, "title" | "normalizedTitle" | "game" | "category">): boolean {
   if (isNonProductContentTitle(product.title)) return false;
   if (isLikelyAccessoryProduct(product.title)) return false;
+  if (isUnsupportedLocalizedCardProductTitle(product.title)) return false;
   if (isLikelySealedTcgProductTitle(product.title)) return true;
   return product.game !== "UNKNOWN" && hasSourceContextSealedTcgProductKeyword(product.title);
 }

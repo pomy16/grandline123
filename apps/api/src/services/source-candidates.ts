@@ -15,6 +15,14 @@ function sourceKey(url: string, baseUrl: string) {
   }
 }
 
+function isLikelyProductDetailScanUrl(parsed: URL) {
+  const path = normalizePathForSafety(parsed.pathname).replace(/\/+$/, "");
+  if (/(^|\/)(produkt|zbozi|item|hra)\//.test(path)) return true;
+  if (/alza\.cz$/i.test(parsed.hostname) && /-d\d+\.htm$/.test(path)) return true;
+  if (/smarty\.cz$/i.test(parsed.hostname) && /-4p\d+$/.test(path)) return true;
+  return false;
+}
+
 export function isSafeScanSourceUrl(url: string, baseUrl: string) {
   try {
     const parsed = new URL(url, baseUrl);
@@ -25,6 +33,7 @@ export function isSafeScanSourceUrl(url: string, baseUrl: string) {
     if (parsed.origin !== base.origin) return false;
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
     if (segments.length === 0) return false;
+    if (isLikelyProductDetailScanUrl(parsed)) return false;
     if (/basket|cart|checkout|order|payment|objednavka|kosik|platba|addtocart|add-to-cart|add_to_cart|pridat-do-kosiku|vlozit-do-kosiku|pokladna/.test(searchPath)) return false;
     if (/\/(?:blog|clanek|clanky|clanky-videa|clanky_videa|article|articles|magazin|navod|guide|poradna)(?:\/|$)/.test(`${path}/`)) return false;
     if (/(^|\/)(jak-|proc-|ochrana-|osobni-udaje|obchodni-podminky|cookie|kontakt|o-nas|reklamace|doprava|platba|spustili-jsme)/.test(path)) return false;

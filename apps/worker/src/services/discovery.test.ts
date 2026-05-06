@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isRelevantTargetProduct, type StoreConfig } from "@tcg-monitor/shared";
 import { productsFromHtmlDocument } from "../monitors/html-monitor";
-import { candidateStatusFromValidatedProducts } from "./discovery";
+import { candidateStatusFromValidatedProducts, extractAnchorUrls, isPaginationCandidate } from "./discovery";
 
 const knihy: StoreConfig = {
   id: "knihy",
@@ -71,5 +71,16 @@ describe("discovery product quality", () => {
     expect(products).toHaveLength(1);
     expect(relevantProducts).toHaveLength(0);
     expect(candidateStatusFromValidatedProducts(relevantProducts.length)).toBe("EMPTY");
+  });
+
+  it("decodes pagination links so filtered source candidates keep query params", () => {
+    const hrefs = extractAnchorUrls(`
+      <a href="/pokemon?in_stock=true&amp;in_shop_stock=true&amp;p=1">2</a>
+      <a href="/produkt/ascended-heroes-booster-bundle-IAJ6G1">Product</a>
+    `);
+
+    expect(hrefs).toContain("/pokemon?in_stock=true&in_shop_stock=true&p=1");
+    expect(isPaginationCandidate("https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true&p=1", "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true")).toBe(true);
+    expect(isPaginationCandidate("https://www.najada.games/produkt/ascended-heroes-booster-bundle-IAJ6G1", "https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true")).toBe(false);
   });
 });

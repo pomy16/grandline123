@@ -60,4 +60,12 @@ describe("source candidate scan source helpers", () => {
     expect(() => addScanSourceUrl(["https://www.tcgkarty.cz/tcg-pokemon"], "https://www.tcgkarty.cz/", "https://www.tcgkarty.cz")).toThrow("not safe");
     expect(() => promotePrimarySourceUrl(["https://www.tcgkarty.cz/tcg-pokemon"], "https://www.tcgkarty.cz/spustili-jsme-sablonu-new-york", "https://www.tcgkarty.cz")).toThrow("not safe");
   });
+
+  it("rejects product detail URLs as scan sources while keeping category/listing URLs valid", () => {
+    expect(isSafeScanSourceUrl("https://www.najada.games/pokemon?in_stock=true&in_shop_stock=true", "https://www.najada.games")).toBe(true);
+    expect(isSafeScanSourceUrl("https://www.najada.games/produkt/ascended-heroes-booster-bundle-IAJ6G1", "https://www.najada.games")).toBe(false);
+    expect(isSafeScanSourceUrl("https://www.alza.cz/hracky/pokemon-karty/18879069.htm#f&pg=1", "https://www.alza.cz")).toBe(true);
+    expect(isSafeScanSourceUrl("https://www.alza.cz/hracky/pokemon-tcg-mega-charizard-tin-d13221710.htm", "https://www.alza.cz")).toBe(false);
+    expect(isSafeScanSourceUrl("https://www.smarty.cz/Pokemon-TCG-Mega-Zygarde-ex-Premium-Collection-4p269005", "https://www.smarty.cz")).toBe(false);
+  });
 });

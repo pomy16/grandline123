@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isRelevantTargetProduct, type StoreConfig } from "@tcg-monitor/shared";
 import { extractPageReportedCount, productLinks, productsFromHtmlDocument, productsFromProductCards, publicCartLink } from "./html-monitor";
-import { isPurchaseAssistUrl, isValidSourceCandidateUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
+import { isPurchaseAssistUrl, isValidProductUrl, isValidSourceCandidateUrl, productFromUnknown, uniqueProducts } from "./parser-utils";
 
 const store: StoreConfig = {
   id: "store-1",
@@ -190,6 +190,65 @@ describe("product parser normalization", () => {
     expect(productFromUnknown({ "@type": "Product", name: "Booster boxy", url: "/pokemon/booster-boxy", image: "/category.jpg", offers: { price: "1" } }, najada, "discovery-metadata")).toBeNull();
   });
 
+  it("keeps product URLs out of SourceCandidate scan sources while allowing real product records", () => {
+    const najada = { ...store, name: "Najáda", baseUrl: "https://www.najada.games", listingUrls: ["https://www.najada.games/pokemon"] };
+    const productUrl = "https://www.najada.games/produkt/ascended-heroes-booster-bundle-IAJ6G1";
+
+    expect(isValidSourceCandidateUrl(productUrl, najada)).toBe(false);
+    expect(isValidProductUrl(productUrl, najada)).toBe(true);
+    expect(
+      productFromUnknown(
+        {
+          "@type": "Product",
+          name: "Ascended Heroes Booster Bundle",
+          url: productUrl,
+          image: "/bundle.webp",
+          offers: { price: "2299", availability: "InStock" }
+        },
+        najada,
+        "playwright-monitor"
+      )
+    ).toMatchObject({ title: "Ascended Heroes Booster Bundle", stockStatus: "IN_STOCK" });
+  });
+
+  it("rejects Alza category tiles with numeric category URLs as products but keeps them valid scan sources", () => {
+    const alza = { ...store, name: "Alza", baseUrl: "https://www.alza.cz", listingUrls: ["https://www.alza.cz/hracky/pokemon-karty/18879069.htm"], currency: "CZK" };
+    const categoryUrl = "https://www.alza.cz/hracky/pokemon-tiny-plechovky/18903052.htm";
+
+    expect(isValidSourceCandidateUrl(categoryUrl, alza)).toBe(true);
+    expect(isValidProductUrl(categoryUrl, alza)).toBe(false);
+    expect(
+      productFromUnknown(
+        { "@type": "Product", name: "Pokémon – Tiny (plechovky)", url: categoryUrl, image: "/category.jpg", offers: { price: "1" } },
+        alza,
+        "playwright-monitor"
+      )
+    ).toBeNull();
+    expect(
+      productsFromProductCards(
+        `<article class="product"><a href="${categoryUrl}"><img src="/tiny.jpg" alt="Pokémon – Tiny (plechovky)" /></a><strong>1 Kč</strong></article>`,
+        alza,
+        alza.listingUrls[0],
+        "playwright-monitor"
+      )
+    ).toEqual([]);
+  });
+
+  it("accepts Alza product detail URLs with -d product identifiers", () => {
+    const alza = { ...store, name: "Alza", baseUrl: "https://www.alza.cz", listingUrls: ["https://www.alza.cz/hracky/pokemon-karty/18879069.htm"], currency: "CZK" };
+    const productUrl = "https://www.alza.cz/hracky/pokemon-tcg-mega-charizard-tin-d13221710.htm";
+
+    expect(isValidSourceCandidateUrl(productUrl, alza)).toBe(false);
+    expect(isValidProductUrl(productUrl, alza)).toBe(true);
+    expect(
+      productFromUnknown(
+        { "@type": "Product", name: "Pokémon TCG: Mega Charizard Tin", url: productUrl, image: "/tin.jpg", offers: { price: "1599", availability: "InStock" } },
+        alza,
+        "playwright-monitor"
+      )
+    ).toMatchObject({ title: "Pokémon TCG: Mega Charizard Tin", stockStatus: "IN_STOCK" });
+  });
+
   it("rejects homepage, article, guide, and info pages as scan source candidates", () => {
     const tcgKarty = { ...store, name: "TCG Karty", baseUrl: "https://www.tcgkarty.cz", listingUrls: ["https://www.tcgkarty.cz/tcg-pokemon"] };
     const tolarie = { ...store, name: "Tolarie", baseUrl: "https://www.tolarie.cz", listingUrls: ["https://www.tolarie.cz/koupit_produkty/katalog/48-pokemon-produkty/"] };
@@ -317,6 +376,54 @@ describe("product parser normalization", () => {
     expect(isRelevantTargetProduct(products[0])).toBe(true);
     expect(products[1]).toMatchObject({ title: "Lorcana: Wilds Unknown Booster Box", game: "UNKNOWN" });
     expect(isRelevantTargetProduct(products[1])).toBe(false);
+  });
+
+  it("uses Pokemon set-name hints before broad source page context", () => {
+    const products = productsFromProductCards(
+      `
+        <article class="product">
+          <a href="/mega-evolution-booster/">
+            <img src="/mega.jpg" alt="Mega Evolution Booster" />
+          </a>
+          <strong>189 Kč</strong>
+        </article>
+      `,
+      { ...store, name: "Professor Onyx", baseUrl: "https://www.professoronyx.com", listingUrls: ["https://www.professoronyx.com/one-piece/"], currency: "CZK" },
+      "https://www.professoronyx.com/one-piece/",
+      "playwright-monitor"
+    );
+
+    expect(products).toHaveLength(1);
+    expect(products[0]).toMatchObject({ title: "Mega Evolution Booster", game: "POKEMON" });
+    expect(isRelevantTargetProduct(products[0])).toBe(true);
+  });
+
+  it("does not infer Lorcana starter decks as One Piece sealed targets", () => {
+    const products = productsFromProductCards(
+      `
+        <article class="product">
+          <a href="/reign-of-jafar-ruby-and-steel-starter-deck/">
+            <img src="/lorcana.jpg" alt="Reign of Jafar - Ruby and Steel Starter Deck" />
+          </a>
+          <span>Skladem</span>
+        </article>
+        <article class="product">
+          <a href="/one-piece-starter-deck-st-13/">
+            <img src="/op.jpg" alt="One Piece Card Game Starter Deck ST-13" />
+          </a>
+          <span>Skladem</span>
+        </article>
+      `,
+      { ...store, name: "Professor Onyx", baseUrl: "https://www.professoronyx.com", listingUrls: ["https://www.professoronyx.com/starter-decky/"], currency: "CZK" },
+      "https://www.professoronyx.com/starter-decky/",
+      "playwright-monitor"
+    );
+
+    expect(products).toHaveLength(2);
+    expect(products[0]).toMatchObject({ title: "Reign of Jafar - Ruby and Steel Starter Deck", game: "UNKNOWN" });
+    expect(isRelevantTargetProduct(products[0])).toBe(false);
+    expect(products[1]).toMatchObject({ title: "One Piece Card Game Starter Deck ST-13", game: "ONE_PIECE" });
+    expect(isRelevantTargetProduct(products[1])).toBe(true);
   });
 
   it("skips rendered category controls and labels from product-card extraction", () => {

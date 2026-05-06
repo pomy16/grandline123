@@ -5,6 +5,7 @@ import {
   isLikelySealedTcgProductTitle,
   isRelevantTargetProduct,
   isNonProductContentTitle,
+  isUnsupportedLocalizedCardProductTitle,
   keywordRuleMatchesProduct,
   normalizeTitle,
   normalizeSourceUrl,
@@ -37,6 +38,7 @@ describe("shared normalization utilities", () => {
   it("infers the target game from product titles", () => {
     expect(inferGame("One Piece Card Game Starter Deck")).toBe("ONE_PIECE");
     expect(inferGame("Pokemon TCG Booster Box")).toBe("POKEMON");
+    expect(inferGame("Reign of Jafar - Ruby and Steel Starter Deck")).toBe("UNKNOWN");
   });
 
   it("builds a stable product identity key", () => {
@@ -205,6 +207,29 @@ describe("shared normalization utilities", () => {
       "Pokémon TCG Paldea Legends Tins: Miraidon ex Plechovka"
     ]) {
       expect(isLikelySealedTcgProductTitle(title)).toBe(true);
+    }
+  });
+
+  it("prefers English and Japanese sealed products over unsupported localized card products", () => {
+    expect(isUnsupportedLocalizedCardProductTitle("Pokémon TCG: Mega Brave Booster Pack (Japonský)")).toBe(false);
+    expect(isLikelySealedTcgProductTitle("Pokémon TCG: Mega Brave Booster Pack (Japonský)")).toBe(true);
+    expect(isLikelySealedTcgProductTitle("Pokemon TCG Mega Evolution Booster Pack English")).toBe(true);
+
+    for (const title of [
+      "Pokémon TCG: Destined Rivals Booster německy",
+      "Pokemon TCG Ruler of the Black Flame Booster korejsky",
+      "One Piece Card Game Booster Spanish"
+    ]) {
+      expect(isUnsupportedLocalizedCardProductTitle(title)).toBe(true);
+      expect(isLikelySealedTcgProductTitle(title)).toBe(false);
+      expect(
+        isRelevantTargetProduct({
+          title,
+          normalizedTitle: normalizeTitle(title),
+          game: inferGame(title),
+          category: "Sealed"
+        })
+      ).toBe(false);
     }
   });
 

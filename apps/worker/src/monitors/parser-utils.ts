@@ -83,6 +83,7 @@ export function isValidSourceCandidateUrl(url: string | null, storeConfig: Store
     const segments = path.split("/").filter(Boolean);
     if (parsed.origin !== base.origin) return false;
     if (segments.length === 0) return false;
+    if (isLikelyProductDetailUrl(parsed.toString(), storeConfig)) return false;
     if (/\/(?:blog|clanek|clanky|clanky-videa|clanky_videa|article|articles|magazin|navod|guide|poradna)(?:\/|$)/.test(`${path}/`)) return false;
     if (/(^|\/)(jak-|proc-|ochrana-|osobni-udaje|obchodni-podminky|cookie|kontakt|o-nas|reklamace|doprava|platba|spustili-jsme)/.test(path)) return false;
     return ["http:", "https:"].includes(parsed.protocol);
@@ -151,6 +152,23 @@ export function hasProductDetailUrlPattern(url: string | null, storeConfig: Stor
   }
 }
 
+export function isLikelyProductDetailUrl(url: string | null, storeConfig: StoreConfig): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, storeConfig.baseUrl);
+    const path = normalizePathForSafety(parsed.pathname);
+    const base = new URL(storeConfig.baseUrl);
+    if (parsed.origin !== base.origin) return false;
+    if (/(^|\/)(produkt|zbozi|item|hra)\//.test(path)) return true;
+    if (/\.cz$/i.test(parsed.hostname) && /\/produkt\//.test(path)) return true;
+    if (/alza\.cz$/i.test(parsed.hostname) && /-d\d+\.htm$/.test(path)) return true;
+    if (/smarty\.cz$/i.test(parsed.hostname) && /-4p\d+\/?$/.test(path)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function isLikelySourcePageUrl(url: string | null, storeConfig: StoreConfig): boolean {
   if (!url) return true;
   if (isPurchaseAssistUrl(url, storeConfig.baseUrl)) return true;
@@ -164,6 +182,7 @@ export function isLikelySourcePageUrl(url: string | null, storeConfig: StoreConf
     if (/firmy\.cz$/i.test(parsed.hostname)) return true;
     if (isGenericProductUrl(canonical, storeConfig)) return true;
     if (segments.length === 0) return true;
+    if (/alza\.cz$/i.test(parsed.hostname) && /\/hracky\/[^/]+\/\d+\.htm$/.test(path) && !/-d\d+\.htm$/.test(path)) return true;
     if (/\/(?:publisher|nakladatel|category|kategorie|katalog|search|vyhledavani|strana|page|blog|clanek|article|magazin|navod|guide|poradna|jak-nakupovat|osobni-udaje)(?:\/|$)/.test(`${path}/`)) return true;
     if (/(^|\/)(jak-|proc-|ochrana-|obchodni-podminky|cookie|kontakt|reklamace|doprava|platba)/.test(path)) return true;
     if (/load-more|loadmore|nacist|dalsi|pagination|ajax/.test(path)) return true;
