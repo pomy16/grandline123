@@ -2988,6 +2988,876 @@ Whether the branch is safe so far:
 
 - Yes, safe so far. This daily cycle only updated the automation log and ran local verification.
 
+### 23:27 CEST - Post-Deliverable Branch Sanity Checkpoint
+
+Time:
+
+- 2026-05-20 23:27 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- `git diff --check`
+- Final daily deliverable entry in `AUTOMATION_LOG.md`
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is `4723752 Update daily automation log`.
+- There are no tracked changes after the final daily deliverable push.
+- The same pre-existing untracked local backup files are present and untouched.
+- `git diff --check` is clean.
+- No database writes, source candidate promotion, webhook changes, Discord sends, external store URL requests, user-facing app server starts, or network escalation were needed.
+
+What I changed:
+
+- Added this post-deliverable branch sanity checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `git diff --check` passed before this log entry.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; the final daily deliverable was pushed and the branch remained clean afterward.
+
+Next planned step:
+
+- Continue PR #17 as draft. The next meaningful engineering cycle should resume safe source pagination/multiple-candidate diagnostics or local UI/Discord retest support without bypassing store protections.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log after confirming the pushed branch state.
+
+### 00:28 CEST - Shared Typecheck Checkpoint
+
+Time:
+
+- 2026-05-21 00:28 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- `git diff --stat`
+- `git diff --check`
+- Shared package TypeScript contract check
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- The initial shared typecheck run stalled and then emitted TypeScript global-type errors after the process was interrupted; an immediate clean rerun passed, so I treated the first run as transient/interrupted rather than a code failure.
+- No database writes, source candidate promotion, webhook changes, Discord sends, external store URL requests, user-facing app server starts, or network escalation were needed beyond clearing the stuck local `tsc` attempt.
+
+What I changed:
+
+- Added this shared typecheck checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run typecheck -w @tcg-monitor/shared` first attempt was interrupted after stalling and reported transient TypeScript global-type errors.
+- `npm run typecheck -w @tcg-monitor/shared` rerun passed.
+- `git diff --check` passed before this log entry.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; shared package type contracts are green on rerun at the start of the new daily cycle.
+
+Next planned step:
+
+- Continue PR #17 as draft. The next cycle can use local-only API/worker/web checks without external store fetches or Discord delivery.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local shared typecheck.
+
+### 00:28 CEST - Full Verification Checkpoint
+
+Time:
+
+- 2026-05-21 00:28 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- `git diff --stat`
+- `git diff --check`
+- Full workspace typecheck, test suite, and production build
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Full workspace typecheck, full workspace tests, and production build pass.
+- The full test/build commands were unusually slow in the web package phases, but completed successfully.
+- No database writes, source candidate promotion, webhook changes, Discord sends, external store URL requests, user-facing app server starts, or production code changes were needed.
+
+What I changed:
+
+- Added this full verification checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run typecheck` passed across API, web, worker, and shared packages.
+- `npm test` passed outside the sandbox so API route tests could bind an ephemeral local server:
+  - API: 7 files, 18 tests.
+  - Web: 2 files, 3 tests.
+  - Worker: 6 files, 57 tests.
+  - Shared: 2 files, 29 tests.
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed across shared, API, worker, and web packages.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; full verification is green at the start of the new daily cycle.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local verification.
+
+### 00:51 CEST - Source Candidate Health Test Checkpoint
+
+Time:
+
+- 2026-05-22 00:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- `git diff --stat`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- API source candidate and source health service tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Local source candidate/source health tests pass.
+- No database writes, source candidate promotion, webhook changes, Discord sends, external store URL requests, user-facing app server starts, or network escalation were needed.
+
+What I changed:
+
+- Added this source candidate health test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- source-candidates.test.ts source-health.test.ts` passed: 2 files, 9 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local source candidate and source health tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local API source candidate/source health tests.
+
+### 01:51 CEST - Notification Routing Test Checkpoint
+
+Time:
+
+- 2026-05-22 01:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Worker notification and Discord routing unit tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Local notification/Discord routing tests pass with test doubles and no real Discord delivery.
+- No database writes, source candidate promotion, webhook changes, external store URL requests, user-facing app server starts, or network escalation were needed.
+
+What I changed:
+
+- Added this notification routing test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/worker -- notifications.test.ts discord.test.ts` passed: 2 files, 19 tests.
+- The worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local notification routing and Discord tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local notification routing tests with no real Discord delivery.
+
+### 02:51 CEST - Parser Utility Test Checkpoint
+
+Time:
+
+- 2026-05-22 02:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Worker parser utility tests for product extraction, stock mapping, URL normalization, relevance filtering, JSON-LD handling, and skip behavior
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Parser utility tests pass locally, covering the strict sealed-product relevance and Czech stock parsing surface that protects the store monitoring audit work.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this parser utility test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/worker -- parser-utils.test.ts` passed: 1 file, 22 tests.
+- The worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local parser utility tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local parser utility tests.
+
+### 03:51 CEST - Worker Scanner/Discovery Test Checkpoint
+
+Time:
+
+- 2026-05-22 03:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Available scanner, discovery, source candidate, and source health test files
+- Worker scanner and discovery unit tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Worker scanner and discovery tests pass locally, covering the dry-run/discovery service surface without real Discord delivery.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this worker scanner/discovery test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/worker -- scanner.test.ts discovery.test.ts` passed: 2 files, 11 tests.
+- The worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local worker scanner and discovery tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local scanner/discovery tests with no real Discord delivery.
+
+### 04:51 CEST - API Source Candidate/Health Test Checkpoint
+
+Time:
+
+- 2026-05-22 04:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Available API and worker test files for source, route, scanner, discovery, and notification behavior
+- API source candidate and source health service tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- API source candidate/source health tests pass locally, covering safe source URL handling and source health diagnostics without external store fetches.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this API source candidate/source health checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- source-candidates.test.ts source-health.test.ts` passed: 2 files, 9 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local API source candidate/source health tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local API source candidate/source health tests.
+
+### 05:51 CEST - API Route Test Checkpoint
+
+Time:
+
+- 2026-05-22 05:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- API route and service test files for health, stores, products, source candidates, auth, and source health
+- API route tests for health, stores, and products
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- API route tests pass locally without sandbox escalation.
+- The test pattern also included `source-health.test.ts`, so source health diagnostics stayed covered in this cycle.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this API route test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- health.test.ts stores.test.ts products.test.ts` passed: 4 files, 8 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local API health/stores/products route tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local API route tests.
+
+### 06:51 CEST - API Auth/Env Test Checkpoint
+
+Time:
+
+- 2026-05-22 06:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- API auth/env test files
+- API auth and environment configuration tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- API auth/env tests pass locally, covering service token behavior and environment validation without external requests.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this API auth/env checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- auth.test.ts env.test.ts` passed: 2 files, 4 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local API auth/env tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local API auth/env tests.
+
+### 07:51 CEST - Shared Package Test Checkpoint
+
+Time:
+
+- 2026-05-22 07:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Shared package test and TypeScript config files
+- Shared package preset and exported contract tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Shared package tests pass locally, including Czech store preset coverage and shared exported contracts used by API/worker.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this shared package test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/shared` passed: 2 files, 29 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local shared package tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local shared package tests.
+
+### 08:51 CEST - Web Utility Test Checkpoint
+
+Time:
+
+- 2026-05-22 08:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Web package test and TypeScript config files
+- Web format and product quality utility tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Web utility tests pass locally, covering dashboard formatting and product quality helpers without starting the UI server.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this web utility test checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/web -- format.test.ts product-quality.test.ts` passed: 2 files, 3 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; local web utility tests are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran local web utility tests.
+
+### 09:51 CEST - Workspace Typecheck Checkpoint
+
+Time:
+
+- 2026-05-22 09:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Root `package.json` workspace scripts
+- Full workspace TypeScript check
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Full workspace typecheck passes across API, web, worker, and shared packages.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this workspace typecheck checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run typecheck` passed for `@tcg-monitor/api`, `@tcg-monitor/web`, `@tcg-monitor/worker`, and `@tcg-monitor/shared`.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; full workspace TypeScript checks are green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran full workspace typecheck.
+
+### 10:51 CEST - Full Test Suite Checkpoint
+
+Time:
+
+- 2026-05-22 10:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Available local test files across API, web, worker, and shared packages
+- Full root workspace test suite
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Full root `npm test` passes across API, web, worker, and shared packages.
+- The test suite covers API routes/services, source candidate/source health behavior, auth/env validation, web utilities, worker parser/scanner/discovery/notifications/Discord safety, monitor safety, and shared CZ store presets/contracts.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this full test suite checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm test` passed: API 7 files/18 tests, web 2 files/3 tests, worker 6 files/57 tests, shared 2 files/29 tests.
+- Root pretest and worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; full local test suite is green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran the full local test suite.
+
+### 11:51 CEST - Production Build Checkpoint
+
+Time:
+
+- 2026-05-22 11:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Workspace package manifests
+- Production build across shared, API, worker, and web packages
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- Production build passes for shared, API, worker, and Next.js web app.
+- The web build compiled successfully, checked types, generated static pages, and produced the expected route summary.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network escalation were needed.
+
+What I changed:
+
+- Added this production build checkpoint entry only.
+- No production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed for `@tcg-monitor/shared`, `@tcg-monitor/api`, `@tcg-monitor/worker`, and `@tcg-monitor/web`.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; production build is green.
+
+Next planned step:
+
+- Continue PR #17 as draft. Do not commit this checkpoint until the normal daily deliverable window unless a user-requested code change requires it.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and ran the production build.
+
+### 12:51 CEST - Web ESLint Configuration Checkpoint
+
+Time:
+
+- 2026-05-22 12:51 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -3 --oneline`
+- Recent `AUTOMATION_LOG.md` checkpoints
+- Workspace lint/build/test scripts in package manifests
+- Existing web ESLint/Next configuration files
+- Root lint command behavior
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `4723752 Update daily automation log`.
+- Before this cycle, tracked changes were limited to `AUTOMATION_LOG.md`.
+- The same pre-existing untracked local backup files are present and untouched.
+- `npm run lint` initially failed because `next lint` entered the interactive ESLint setup prompt.
+- The web package already had `eslint` and `eslint-config-next` dependencies, but no project ESLint config.
+- After adding a standard Next ESLint config, `npm run lint` completed non-interactively with exit code 0.
+- Lint currently reports warnings only:
+  - `apps/web/src/app/events/page.tsx`: missing `loadEvents` dependency in `useEffect`
+  - `apps/web/src/app/logs/page.tsx`: missing `loadLogs` dependency in `useEffect`
+  - `apps/web/src/app/products/page.tsx`: missing `loadProducts` dependency in `useEffect`
+  - `apps/web/src/app/products/page.tsx`: `<img>` warning from `@next/next/no-img-element`
+  - `apps/web/src/app/stores/page.tsx`: missing `loadStores` dependency in `useEffect`
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, or network access were needed.
+
+What I changed:
+
+- Added `apps/web/.eslintrc.json` with `next/core-web-vitals` so lint is deterministic and non-interactive.
+- Added this web ESLint configuration checkpoint entry.
+- No database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed.
+
+Files changed:
+
+- `apps/web/.eslintrc.json`
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run lint` initially failed because `next lint` prompted for ESLint setup.
+- `npm run lint` passed after adding the config, with warnings listed above.
+- One approved cleanup attempt for the long-running `next lint` command was issued, but the lint process had already completed successfully.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; lint is now usable in automation and does not prompt for interactive setup.
+
+Next planned step:
+
+- Continue PR #17 as draft. A future small UI maintenance task can address the existing lint warnings without changing monitoring behavior.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only added deterministic web ESLint config, updated the automation log, and ran local lint.
+
+### 23:08 CEST - Daily Deliverable Verification
+
+Time:
+
+- 2026-05-26 23:08 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Current diff/stat for tracked changes
+- Web ESLint config state
+- Full workspace typecheck, test, build, and lint behavior
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit before this deliverable was `4723752 Update daily automation log`.
+- Intended changes are limited to:
+  - `AUTOMATION_LOG.md`
+  - `apps/web/.eslintrc.json`
+- The same pre-existing untracked local backup files are present and intentionally left unstaged.
+- `npm run lint` is now deterministic and non-interactive because the web app has an explicit Next ESLint config.
+- Lint/build still report warnings only in existing web pages:
+  - missing `useEffect` dependencies for `loadEvents`, `loadLogs`, `loadProducts`, and `loadStores`
+  - `@next/next/no-img-element` warning in products page
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Kept the hourly automation checkpoints in `AUTOMATION_LOG.md`.
+- Added `apps/web/.eslintrc.json` with `next/core-web-vitals` so lint no longer prompts during automation.
+- Added this daily deliverable verification entry.
+- No monitoring runtime behavior, parser behavior, scanner behavior, source candidate data, database data, webhook records, Discord routing, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+- `apps/web/.eslintrc.json`
+
+Tests run:
+
+- `npm run typecheck` passed across API, web, worker, and shared packages.
+- `npm test` passed: API 7 files/18 tests, web 2 files/3 tests, worker 6 files/57 tests, shared 2 files/29 tests.
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed across shared, API, worker, and web packages.
+- `npm run lint` passed with warnings listed above.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; full verification is green and lint is automation-safe.
+
+Next planned step:
+
+- Stage only intended files, commit the daily automation update, and push the existing `daily-autonomous-improvements` branch for PR #17.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. The branch has only intended log/config changes for this deliverable.
+
 ### 14:32 CEST - API Type Guard Checkpoint
 
 Time:
