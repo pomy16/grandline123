@@ -3858,6 +3858,672 @@ Whether the branch is safe so far:
 
 - Yes, safe so far. The branch has only intended log/config changes for this deliverable.
 
+### 07:54 CEST - Web Lint Warning Cleanup Checkpoint
+
+Time:
+
+- 2026-05-27 07:54 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` deliverable/checkpoint entries
+- Existing web lint warnings in Events, Logs, Products, and Stores pages
+- Web lint, typecheck, and unit test behavior
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Worktree started clean for tracked files; only pre-existing untracked local backup files were present.
+- Existing warnings came from `useEffect` dependencies for `loadEvents`, `loadLogs`, `loadProducts`, and `loadStores`, plus one dynamic external product image warning in the product table.
+- Product image URLs are dynamic store data, so the table keeps the native `<img>` element and suppresses only the specific Next image optimization rule for that line.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Wrapped web page loader functions in `useCallback` and made `useEffect` dependencies explicit.
+- Added a narrow ESLint disable comment for the dynamic product thumbnail `<img>` line.
+- Added this hourly checkpoint entry.
+- No monitoring runtime behavior, parser behavior, scanner behavior, source candidate data, database data, webhook records, Discord routing, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+- `apps/web/src/app/events/page.tsx`
+- `apps/web/src/app/logs/page.tsx`
+- `apps/web/src/app/products/page.tsx`
+- `apps/web/src/app/stores/page.tsx`
+
+Tests run:
+
+- `npm run lint -w @tcg-monitor/web` passed with no ESLint warnings or errors.
+- `npm run typecheck -w @tcg-monitor/web` passed.
+- `npm run test -w @tcg-monitor/web` passed: 2 files, 3 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; the web lint warning cleanup is local, deterministic, and verified.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle changed only web lint cleanup code and `AUTOMATION_LOG.md`; no monitor or external integration behavior changed.
+
+### 10:09 CEST - Root Lint Verification Checkpoint
+
+Time:
+
+- 2026-05-27 10:09 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` web lint cleanup and deliverable entries
+- Current diff/stat for uncommitted tracked files
+- Root workspace lint behavior after the web lint warning cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Root `npm run lint` now runs through the workspace command and reports no ESLint warnings or errors.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this root lint verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run lint` passed with no ESLint warnings or errors.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; lint is clean at the root workspace level.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified root lint after the prior web cleanup.
+
+### 11:14 CEST - Workspace Typecheck Verification Checkpoint
+
+Time:
+
+- 2026-05-27 11:14 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` web cleanup, root lint, and deliverable entries
+- Current diff/stat for uncommitted tracked files
+- Full workspace TypeScript check after the web lint cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Full workspace typecheck passes across API, web, worker, and shared packages.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this workspace typecheck verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run typecheck` passed across API, web, worker, and shared packages.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; workspace TypeScript checks remain green after the web lint cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified workspace typecheck after the prior web cleanup.
+
+### 13:02 CEST - Workspace Test Verification Checkpoint
+
+Time:
+
+- 2026-05-27 13:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` web cleanup, root lint, and workspace typecheck entries
+- Current diff/stat for uncommitted tracked files
+- Full workspace test suite after the web lint cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Full root `npm test` passes across API, web, worker, and shared packages.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this workspace test verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm test` passed: API 7 files/18 tests, web 2 files/3 tests, worker 6 files/57 tests, shared 2 files/29 tests.
+- Root pretest and worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; full workspace tests remain green after the web lint cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified full workspace tests after the prior web cleanup.
+
+### 14:02 CEST - Production Build Verification Checkpoint
+
+Time:
+
+- 2026-05-27 14:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` root lint, workspace typecheck, and workspace test entries
+- Current diff/stat for uncommitted tracked files
+- Production build after the web lint cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Production build passes across shared, API, worker, and web packages.
+- The Next.js web build now compiles, lints, checks types, and generates static pages without the prior web lint warnings.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this production build verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed for `@tcg-monitor/shared`, `@tcg-monitor/api`, `@tcg-monitor/worker`, and `@tcg-monitor/web`.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; production build remains green after the web lint cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified production build after the prior web cleanup.
+
+### 15:02 CEST - Web Cleanup Diff Review Checkpoint
+
+Time:
+
+- 2026-05-27 15:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` workspace test and production build entries
+- Focused diff for the Events, Logs, Products, and Stores pages touched by the web lint cleanup
+- Web lint behavior after reviewing the diff
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- The focused web diff only memoizes page loader functions with `useCallback`, updates `useEffect` dependencies to those loader callbacks, and keeps one narrow ESLint disable for the dynamic external product thumbnail image.
+- Web lint passes with no warnings or errors.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this web cleanup diff review checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run lint -w @tcg-monitor/web` passed with no ESLint warnings or errors.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; the web cleanup diff is narrow and lint remains clean.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified the focused web cleanup diff.
+
+### 16:02 CEST - Worker Safety Routing Checkpoint
+
+Time:
+
+- 2026-05-27 16:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` workspace test, production build, and web cleanup diff entries
+- Current diff/stat for uncommitted tracked files
+- Worker monitor safety, notification routing, and Discord service tests
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Worker safety/routing tests pass locally with test doubles.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this worker safety routing checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/worker -- monitor-safety.test.ts notifications.test.ts discord.test.ts` passed: 3 files, 24 tests.
+- The worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; monitor safety and notification routing tests remain green after the web cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified worker safety/routing tests.
+
+### 17:02 CEST - API Route Verification Checkpoint
+
+Time:
+
+- 2026-05-27 17:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` production build, web cleanup diff, and worker safety routing entries
+- Current diff/stat for uncommitted tracked files
+- API route tests for health, stores, and products after the web page cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- API route tests pass locally; the selected pattern also includes source health coverage.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this API route verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- health.test.ts stores.test.ts products.test.ts` passed: 4 files, 8 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; API health/stores/products route tests remain green after the web cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified API route tests.
+
+### 18:02 CEST - API Service Verification Checkpoint
+
+Time:
+
+- 2026-05-27 18:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` web cleanup, worker safety, and API route entries
+- Current diff/stat for uncommitted tracked files
+- API service tests for auth, env, source candidates, and source health after the web page cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- API service tests pass locally for auth/env/source candidate/source health behavior.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this API service verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/api -- auth.test.ts env.test.ts source-candidates.test.ts source-health.test.ts` passed: 4 files, 13 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; API auth/env/source handling tests remain green after the web cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified API service tests.
+
+### 19:02 CEST - Worker Parser/Scanner Verification Checkpoint
+
+Time:
+
+- 2026-05-27 19:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` worker safety, API route, and API service entries
+- Current diff/stat for uncommitted tracked files
+- Worker parser, scanner, and discovery tests after the web page cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Worker parser/scanner/discovery tests pass locally with test doubles.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this worker parser/scanner verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/worker -- parser-utils.test.ts scanner.test.ts discovery.test.ts` passed: 3 files, 33 tests.
+- The worker pretest rebuilt `@tcg-monitor/shared` locally.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; worker parser/scanner/discovery tests remain green after the web cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified worker parser/scanner/discovery tests.
+
+### 20:02 CEST - Shared Package Verification Checkpoint
+
+Time:
+
+- 2026-05-27 20:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` API route, API service, and worker parser/scanner entries
+- Current diff/stat for uncommitted tracked files
+- Shared package tests after the web page cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Shared package tests pass locally, including Czech store preset coverage and shared exported contracts.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this shared package verification checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run test -w @tcg-monitor/shared` passed: 2 files, 29 tests.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; shared package tests remain green after the web cleanup.
+
+Next planned step:
+
+- Continue PR #17 as draft. Before the next daily deliverable, rerun full verification across typecheck, tests, build, lint, and diff checks before committing/pushing intended files.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified shared package tests.
+
+### 21:02 CEST - Pre-Deliverable Lint Checkpoint
+
+Time:
+
+- 2026-05-27 21:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Recent `AUTOMATION_LOG.md` API service, worker parser/scanner, and shared package entries
+- Current uncommitted tracked file list before the evening deliverable window
+- Root workspace lint behavior after the web page cleanup
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit is still `a3e479f Update daily automation log`.
+- Intended tracked changes remain limited to `AUTOMATION_LOG.md` and the four web pages touched by the lint cleanup.
+- The same pre-existing untracked local backup files are present and untouched.
+- Root `npm run lint` passes with no ESLint warnings or errors.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, or network escalation were used.
+
+What I changed:
+
+- Added this pre-deliverable lint checkpoint entry only.
+- No additional production code, database data, source candidates, scanner behavior, parser behavior, discovery behavior, dashboard runtime behavior, webhook records, or secrets changed in this cycle.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+
+Tests run:
+
+- `npm run lint` passed with no ESLint warnings or errors.
+- `git diff --check` pending after this log entry.
+
+Result:
+
+- Safe so far; root lint is clean shortly before the daily deliverable window.
+
+Next planned step:
+
+- At the 22:00 CEST daily deliverable window, rerun full verification across typecheck, tests, build, lint, and diff checks, then stage only intended files, commit, and push the existing `daily-autonomous-improvements` branch for PR #17.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. This cycle only updated the automation log and verified root lint.
+
+### 22:02 CEST - Daily Deliverable Verification
+
+Time:
+
+- 2026-05-27 22:02 CEST
+
+What I inspected:
+
+- `git status --short --branch`
+- `git log -5 --oneline`
+- Current uncommitted tracked file list and diff/stat
+- Full workspace typecheck, tests, production build, lint, and diff whitespace checks
+- The existing PR #17 branch target: `daily-autonomous-improvements`
+
+What I found:
+
+- Branch remains `daily-autonomous-improvements` tracking `origin/daily-autonomous-improvements`.
+- Latest pushed commit before this deliverable was `a3e479f Update daily automation log`.
+- Intended tracked changes are limited to:
+  - `AUTOMATION_LOG.md`
+  - `apps/web/src/app/events/page.tsx`
+  - `apps/web/src/app/logs/page.tsx`
+  - `apps/web/src/app/products/page.tsx`
+  - `apps/web/src/app/stores/page.tsx`
+- The same pre-existing untracked local backup files are present and intentionally left unstaged.
+- The web cleanup removed the previous root lint warnings by memoizing page loader callbacks and making `useEffect` dependencies explicit.
+- The dynamic external product thumbnail remains a native `<img>` with a narrow line-level `@next/next/no-img-element` suppression.
+- Full verification passes locally.
+- No database writes, source candidate promotion, webhook changes, real Discord delivery, public store URL requests, browser automation, private endpoints, checkout/cart automation, proxy/evasion, or network escalation were used.
+
+What I changed:
+
+- Kept hourly automation checkpoints in `AUTOMATION_LOG.md`.
+- Cleaned up web lint warnings in Events, Logs, Products, and Stores pages.
+- Added this daily deliverable verification entry.
+- No monitoring runtime behavior, parser behavior, scanner behavior, source candidate data, database data, webhook records, Discord routing, or secrets changed.
+
+Files changed:
+
+- `AUTOMATION_LOG.md`
+- `apps/web/src/app/events/page.tsx`
+- `apps/web/src/app/logs/page.tsx`
+- `apps/web/src/app/products/page.tsx`
+- `apps/web/src/app/stores/page.tsx`
+
+Tests run:
+
+- `npm run typecheck` passed across API, web, worker, and shared packages.
+- `npm test` passed: API 7 files/18 tests, web 2 files/3 tests, worker 6 files/57 tests, shared 2 files/29 tests.
+- `CI=1 NEXT_TELEMETRY_DISABLED=1 npm run build` passed across shared, API, worker, and web packages.
+- `npm run lint` passed with no ESLint warnings or errors.
+- `git diff --check` passed before this log entry.
+
+Result:
+
+- Safe so far; full verification is green and the web lint cleanup is ready to commit.
+
+Next planned step:
+
+- Stage only intended files, commit the daily update, and push the existing `daily-autonomous-improvements` branch for PR #17.
+
+Whether the branch is safe so far:
+
+- Yes, safe so far. The branch has only intended log/web lint cleanup changes for this deliverable.
+
 ### 14:32 CEST - API Type Guard Checkpoint
 
 Time:

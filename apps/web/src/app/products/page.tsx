@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ExternalLink, RefreshCw, RotateCcw, Search, Send, ShoppingCart, XCircle } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
@@ -105,7 +105,7 @@ export default function ProductsPage() {
     setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
   }
 
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -121,11 +121,11 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [query]);
 
   useEffect(() => {
     loadProducts();
-  }, [query]);
+  }, [loadProducts]);
 
   async function productAction(path: string, success: string, body: Record<string, unknown> = {}) {
     setMessage(null);
@@ -277,6 +277,7 @@ export default function ProductsPage() {
                           <td className="py-3 pr-4">
                             <div className="flex items-center gap-3">
                               {product.imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img className="h-12 w-12 rounded-md border border-border object-cover" src={product.imageUrl} alt="" />
                               ) : (
                                 <div className="h-12 w-12 rounded-md border border-border bg-muted" />

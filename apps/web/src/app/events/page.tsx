@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
@@ -68,7 +68,7 @@ export default function EventsPage() {
     setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
   }
 
-  async function loadEvents() {
+  const loadEvents = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -84,11 +84,11 @@ export default function EventsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [query]);
 
   useEffect(() => {
     loadEvents();
-  }, [query]);
+  }, [loadEvents]);
 
   return (
     <>

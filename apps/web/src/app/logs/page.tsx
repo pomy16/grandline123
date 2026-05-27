@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
@@ -135,7 +135,7 @@ export default function LogsPage() {
     setNotificationFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
   }
 
-  async function loadLogs() {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -157,11 +157,11 @@ export default function LogsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [jobQuery, logQuery, notificationQuery]);
 
   useEffect(() => {
     loadLogs();
-  }, [logQuery, jobQuery, notificationQuery]);
+  }, [loadLogs]);
 
   return (
     <>

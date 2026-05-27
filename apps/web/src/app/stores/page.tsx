@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowDownUp, CheckCircle2, Pause, Play, Plus, RefreshCw, Save, Search, Trash2, XCircle } from "lucide-react";
 import { AuthGate } from "../../components/auth-gate";
 import { PageHeader } from "../../components/page-header";
@@ -337,7 +337,7 @@ export default function StoresPage() {
     setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
   }
 
-  async function loadStores() {
+  const loadStores = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -353,7 +353,7 @@ export default function StoresPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [query]);
 
   async function loadStoreDetail(storeId: string) {
     setDetailLoading(true);
@@ -370,7 +370,7 @@ export default function StoresPage() {
 
   useEffect(() => {
     loadStores();
-  }, [query]);
+  }, [loadStores]);
 
   function startEdit(store: StoreRecord) {
     setEditingId(store.id);
